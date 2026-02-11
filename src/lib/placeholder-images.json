@@ -1,3 +1,28 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "orders-card",
+      "description": "Image for the orders card on dashboard",
+      "imageUrl": "https://images.unsplash.com/photo-1608822101624-23542c56db89?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxzaGlwcGluZyUyMGJveGVzfGVufDB8fHx8MTc3MDc2Nzg5OXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "shipping boxes"
+    },
+    {
+      "id": "inventory-card",
+      "description": "Image for the inventory card on dashboard",
+      "imageUrl": "https://images.unsplash.com/photo-1601598505513-7489a6272d2a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHx3YXJlaG91c2UlMjBzaGVsdmVzfGVufDB8fHx8MTc3MDgzNTU0OHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "warehouse shelves"
+    },
+    {
+      "id": "production-card",
+      "description": "Image for the production card on dashboard",
+      "imageUrl": "https://images.unsplash.com/photo-1624301809538-5d5c4562656e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxmYWN0b3J5JTIwbWFjaGluZXxlbnwwfHx8fDE3NzA4NDU3NTR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "factory machine"
+    },
+    {
+      "id": "login-background",
+      "description": "Background image for the login page",
+      "imageUrl": "https://images.unsplash.com/photo-1767884163408-fc4fc6b2c0a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxsb2dpc3RpY3MlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3MDg0NTc1NHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "logistics background"
+    }
+  ]
 }
