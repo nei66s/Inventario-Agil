@@ -17,10 +17,22 @@ import { Badge } from '@/components/ui/badge';
 import { mockMaterials } from '@/lib/data';
 
 export default function InventoryPage() {
+  const getStatusVariant = (available: number) => {
+    if (available <= 0) return 'destructive';
+    if (available <= 100) return 'warning';
+    return 'positive';
+  };
+
+  const getStatusText = (available: number) => {
+    if (available <= 0) return 'Sem Estoque';
+    if (available <= 100) return 'Estoque Baixo';
+    return 'Em Estoque';
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Estoque</CardTitle>
+        <CardTitle className="font-headline">Estoque</CardTitle>
         <CardDescription>
           Monitore e gerencie os níveis de estoque de seus materiais.
         </CardDescription>
@@ -41,15 +53,15 @@ export default function InventoryPage() {
           <TableBody>
             {mockMaterials.map((material) => (
               <TableRow key={material.id}>
-                <TableCell className="font-mono">{material.id}</TableCell>
-                <TableCell className="font-medium">{material.name}</TableCell>
-                <TableCell>{material.uom}</TableCell>
-                <TableCell className="text-right">{material.onHand}</TableCell>
-                <TableCell className="text-right">{material.reserved}</TableCell>
-                <TableCell className="text-right font-bold">{material.available}</TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={material.available > 100 ? 'secondary' : 'destructive'}>
-                    {material.available > 100 ? 'Em Estoque' : 'Estoque Baixo'}
+                <TableCell className="font-mono py-3">{material.id}</TableCell>
+                <TableCell className="font-medium py-3">{material.name}</TableCell>
+                <TableCell className="py-3">{material.uom}</TableCell>
+                <TableCell className="text-right py-3">{material.onHand}</TableCell>
+                <TableCell className="text-right py-3">{material.reserved}</TableCell>
+                <TableCell className="text-right font-bold py-3">{material.available}</TableCell>
+                <TableCell className="text-center py-3">
+                  <Badge variant={getStatusVariant(material.available)}>
+                    {getStatusText(material.available)}
                   </Badge>
                 </TableCell>
               </TableRow>

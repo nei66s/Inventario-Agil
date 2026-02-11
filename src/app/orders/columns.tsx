@@ -13,19 +13,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
+import { Badge, BadgeProps } from '@/components/ui/badge';
 import { Order } from '@/lib/types';
 
-const statusVariantMap: { [key: string]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
+const statusVariantMap: { [key: string]: BadgeProps['variant'] } = {
   Rascunho: 'outline',
   Confirmado: 'secondary',
   'Em Produção': 'default',
   'Em Separação': 'default',
-  Enviado: 'secondary',
+  Enviado: 'positive',
   Cancelado: 'destructive',
 };
 
-const priorityVariantMap: { [key: string]: 'default' | 'secondary' | 'destructive' | 'outline' } = {
+const priorityVariantMap: { [key: string]: BadgeProps['variant'] } = {
   Baixa: 'outline',
   Média: 'secondary',
   Alta: 'default',

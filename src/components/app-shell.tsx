@@ -84,21 +84,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-2 p-2 h-auto"
+                className="w-full justify-start gap-3 p-2 h-auto"
               >
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-9 w-9">
                   <AvatarImage src={user.avatarUrl} alt={user.name} />
                   <AvatarFallback>
                     {user.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col items-start text-left">
-                  <span className="font-medium text-sm">{user.name}</span>
-                  <span className="text-xs text-muted-foreground">
+                <div className="flex flex-col items-start text-left max-w-[100px] truncate">
+                  <span className="font-semibold text-sm truncate">{user.name}</span>
+                  <span className="text-xs text-muted-foreground truncate">
                     {user.role}
                   </span>
                 </div>
-                <ChevronDown className="ml-auto h-4 w-4" />
+                <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 mb-2" side="top" align="start">
@@ -124,7 +124,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 items-center gap-4 border-b bg-card/50 px-4 lg:h-[60px] lg:px-6 sticky top-0 z-10 backdrop-blur-sm">
+        <header className="flex h-14 items-center gap-4 border-b bg-background/80 px-4 lg:h-[60px] lg:px-6 sticky top-0 z-30 backdrop-blur-sm">
           <SidebarTrigger className="md:hidden" />
           <div className="w-full flex-1">
             <h1 className="text-lg font-semibold font-headline">
@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
         </header>
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="flex-1 p-6 lg:p-8">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );
