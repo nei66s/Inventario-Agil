@@ -123,10 +123,15 @@ function upsertProductionTasksForOrder(state: PilotDb, order: Order): void {
   order.items.forEach((item) => {
     const id = `pt-${order.id}-${item.materialId}`;
     const existing = state.productionTasks.find((task) => task.id === id);
+    const shortage = Math.max(0, item.qtyRequested - item.qtyReservedFromStock);
+    const shouldProduce = (item.shortageAction ?? 'PRODUCE') === 'PRODUCE';
+    const qtyToProduce = shouldProduce ? shortage : 0;
+    item.qtyToProduce = qtyToProduce;
+    item.qtyToBuy = shouldProduce ? 0 : shortage;
 
-    if (item.qtyToProduce > 0) {
+    if (qtyToProduce > 0) {
       if (existing) {
-        existing.qtyToProduce = item.qtyToProduce;
+        existing.qtyToProduce = qtyToProduce;
         existing.status = existing.status === 'DONE' ? 'PENDING' : existing.status;
         existing.updatedAt = nowIso;
       } else {
@@ -136,7 +141,7 @@ function upsertProductionTasksForOrder(state: PilotDb, order: Order): void {
           orderNumber: order.orderNumber,
           materialId: item.materialId,
           materialName: item.materialName,
-          qtyToProduce: item.qtyToProduce,
+          qtyToProduce: qtyToProduce,
           status: 'PENDING',
           createdAt: nowIso,
           updatedAt: nowIso,
@@ -145,7 +150,7 @@ function upsertProductionTasksForOrder(state: PilotDb, order: Order): void {
       }
     }
 
-    if (item.qtyToProduce <= 0 && existing) {
+    if (qtyToProduce <= 0 && existing) {
       existing.status = 'DONE';
       existing.qtyToProduce = 0;
       existing.updatedAt = nowIso;
@@ -214,7 +219,7 @@ export function applyReservationOnQtyBlur(
 ): void {
   const order = state.orders.find((item) => item.id === orderId);
   const user = state.users.find((item) => item.id === userId);
-  if (!order || !user) return;
+  if (!order) return;
 
   // Prevent reserving stock for trashed orders
   if (order.trashedAt) return;
@@ -229,10 +234,13 @@ export function applyReservationOnQtyBlur(
   const nowIso = toIso();
   const available = availableFromBalance(balance);
   const reserveQty = Math.min(Math.max(qtyRequested, 0), available);
+  const shortage = Math.max(0, qtyRequested - reserveQty);
+  const shouldProduce = (orderItem.shortageAction ?? 'PRODUCE') === 'PRODUCE';
 
   orderItem.qtyRequested = Math.max(0, qtyRequested);
   orderItem.qtyReservedFromStock = reserveQty;
-  orderItem.qtyToProduce = Math.max(0, orderItem.qtyRequested - reserveQty);
+  orderItem.qtyToProduce = shouldProduce ? shortage : 0;
+  orderItem.qtyToBuy = shouldProduce ? 0 : shortage;
   orderItem.qtySeparated = Math.min(orderItem.qtySeparated, orderItem.qtyReservedFromStock);
 
   if (reserveQty > 0) {
@@ -241,7 +249,7 @@ export function applyReservationOnQtyBlur(
       materialId: orderItem.materialId,
       orderId: order.id,
       userId,
-      userName: user.name,
+      userName: user?.name ?? userId ?? 'Usuario',
       qty: reserveQty,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -252,11 +260,11 @@ export function applyReservationOnQtyBlur(
     balance.reservedTotal += reserveQty;
   }
 
-  if (orderItem.qtyToProduce > 0) {
+  if (shortage > 0) {
     addNotification(state, {
       type: 'RUPTURA',
       title: 'Ruptura detectada no pedido',
-      message: `${order.orderNumber}: ${orderItem.materialName} com ${orderItem.qtyToProduce} para produzir.`,
+      message: `${order.orderNumber}: ${orderItem.materialName} com ${shortage} faltante (${shouldProduce ? 'produzir' : 'comprar'}).`,
       roleTarget: 'Manager',
       orderId: order.id,
       materialId: orderItem.materialId,
@@ -302,7 +310,10 @@ export function saveOrderAndRecalculate(state: PilotDb, orderId: string, actorNa
   if (order.trashedAt) return;
 
   order.items.forEach((item) => {
-    item.qtyToProduce = Math.max(0, item.qtyRequested - item.qtyReservedFromStock);
+    const shortage = Math.max(0, item.qtyRequested - item.qtyReservedFromStock);
+    const shouldProduce = (item.shortageAction ?? 'PRODUCE') === 'PRODUCE';
+    item.qtyToProduce = shouldProduce ? shortage : 0;
+    item.qtyToBuy = shouldProduce ? 0 : shortage;
   });
 
   setReadinessAndStatus(order);
@@ -528,8 +539,10 @@ export function addItemToOrder(state: PilotDb, orderId: string, materialId: stri
     uom: material.standardUom,
     color: material.colorOptions[0] ?? 'Padrao',
     qtyRequested: 0,
+    shortageAction: 'PRODUCE',
     qtyReservedFromStock: 0,
     qtyToProduce: 0,
+    qtyToBuy: 0,
     qtySeparated: 0,
   };
 

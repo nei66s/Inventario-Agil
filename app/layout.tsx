@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import BackendSync from '@/components/backend-sync';
 
 export const metadata: Metadata = {
   title: 'São José Cordas',
@@ -39,6 +40,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         {children}
+        <BackendSync />
         <Toaster />
       </body>
     </html>

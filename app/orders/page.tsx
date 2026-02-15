@@ -39,14 +39,18 @@ export default function OrdersPage() {
   const updateItemConditionField = usePilotStore((state) => state.updateItemConditionField);
   const removeItemCondition = usePilotStore((state) => state.removeItemCondition);
   const onQtyBlurReserve = usePilotStore((state) => state.onQtyBlurReserve);
-  const saveOrder = usePilotStore((state) => state.saveOrder);
   const heartbeatOrder = usePilotStore((state) => state.heartbeatOrder);
   const removeOrderItem = usePilotStore((state) => state.removeOrderItem);
 
   const currentUserId = usePilotStore((state) => state.currentUserId);
+  const setMaterials = usePilotStore((state) => state.setMaterials);
+  const setOrders = usePilotStore((state) => state.setOrders);
+  const syncWithBackend = usePilotStore((state) => state.syncWithBackend);
 
   const [mainView, setMainView] = React.useState<'open' | 'finalized'>('open');
-  const [subView, setSubView] = React.useState<'mine' | 'all'>('mine');
+  // default to show all orders ("Todos") instead of "Meus pedidos"
+  const [subView, setSubView] = React.useState<'mine' | 'all'>('all');
+  const [mounted, setMounted] = React.useState(false);
 
   // Read URL search params only on the client after mount to avoid
   // Next.js prerender/runtime errors related to `useSearchParams()`.
@@ -61,6 +65,33 @@ export default function OrdersPage() {
       // ignore
     }
   }, []);
+
+  // Load materials (and optionally server orders) from API on client mount
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        await syncWithBackend();
+        const m = await fetch('/api/materials');
+        if (mounted && m.ok) {
+          const mats = await m.json().catch(() => []);
+          if (Array.isArray(mats) && mats.length > 0) setMaterials(mats);
+        }
+        const o = await fetch('/api/orders');
+        if (mounted && o.ok) {
+          const orders = await o.json().catch(() => []);
+          if (Array.isArray(orders) && orders.length > 0) setOrders(orders);
+        }
+      } catch {
+        // ignore
+      }
+      // mark component as mounted after client-side data fetch attempt
+      try {
+        setMounted(true);
+      } catch {}
+    })();
+    return () => { mounted = false };
+  }, [setMaterials, setOrders, syncWithBackend]);
 
   const filteredOrders = React.useMemo(() => {
     return db.orders.filter((order) => {
@@ -108,8 +139,17 @@ export default function OrdersPage() {
           <div className="flex items-start justify-between">
             <div className="flex min-w-0 flex-col">
               <div className="flex flex-wrap items-center gap-3">
-                <Button variant={mainView === 'open' ? undefined : 'ghost'} size="sm" onClick={() => setMainView('open')}>Pedidos</Button>
-                <Button variant={mainView === 'finalized' ? undefined : 'ghost'} size="sm" onClick={() => setMainView('finalized')}>Pedidos finalizados</Button>
+                <div className="ml-0">
+                  <Select value={mainView} onValueChange={(v) => setMainView(v as 'open' | 'finalized')}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue placeholder="Pedidos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Pedidos</SelectItem>
+                      <SelectItem value="finalized">Pedidos finalizados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="ml-0">
                   <Select value={subView} onValueChange={(v) => setSubView(v as 'mine' | 'all')}>
                     <SelectTrigger className="w-36">
@@ -133,7 +173,10 @@ export default function OrdersPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          {filteredOrders.length === 0 ? (
+          {!mounted ? (
+            // render same empty state on server and during first client render to avoid hydration mismatches
+            <EmptyState icon={ClipboardList} title="Nenhum pedido na visualizacao" description="Ajuste os filtros ou crie um novo pedido para iniciar." className="min-h-[120px]" />
+          ) : filteredOrders.length === 0 ? (
             <EmptyState icon={ClipboardList} title="Nenhum pedido na visualizacao" description="Ajuste os filtros ou crie um novo pedido para iniciar." className="min-h-[120px]" />
           ) : (
             <div className="max-h-[420px] overflow-y-auto space-y-2">
@@ -176,10 +219,75 @@ export default function OrdersPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { deleteOrder(selectedOrder.id); setSelectedOrderId(null); }}>
+                  <Button variant="outline" onClick={async () => {
+                    try {
+                      // If order id looks like a persisted DB id (O-<number>), call API
+                      if (/^O-\d+$/.test(String(selectedOrder.id))) {
+                        const res = await fetch(`/api/orders/${selectedOrder.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ trashed: true }),
+                        });
+                        if (!res.ok) {
+                          const e = await res.json().catch(() => ({}));
+                          alert(e?.error || 'Falha ao remover pedido');
+                          return;
+                        }
+                        // refresh orders from server
+                        const r2 = await fetch('/api/orders');
+                        if (r2.ok) {
+                          const orders = await r2.json();
+                          setOrders(orders);
+                          setSelectedOrderId(null);
+                        }
+                      } else {
+                        // Local (non-persisted) order — remove from pilot store
+                        deleteOrder(selectedOrder.id);
+                        setSelectedOrderId(null);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert('Erro ao remover pedido');
+                    }
+                  }}>
                     <Trash2 className="mr-2 h-4 w-4" />Excluir
                   </Button>
-                  <Button onClick={() => saveOrder(selectedOrder.id)}>
+                  <Button onClick={async () => {
+                    try {
+                      const order = db.orders.find((o) => o.id === selectedOrder.id);
+                      if (!order) return;
+                      const payload = {
+                        status: (order.status ?? 'draft').toLowerCase(),
+                        items: order.items.map((it: { materialId: string; qtyRequested?: number; unitPrice?: number; shortageAction?: 'PRODUCE' | 'BUY' }) => ({
+                          materialId: Number(String(it.materialId).replace(/^M-/, '')),
+                          quantity: Number(it.qtyRequested || 0),
+                          unitPrice: Number(it.unitPrice || 0),
+                          shortageAction: it.shortageAction ?? 'PRODUCE',
+                        })),
+                      };
+
+                      const res = await fetch('/api/orders/submit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                      });
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        alert(err?.error || 'Falha ao criar pedido');
+                        return;
+                      }
+                      // refresh orders from server
+                      const r2 = await fetch('/api/orders');
+                      if (r2.ok) {
+                        const orders = await r2.json();
+                        setOrders(orders);
+                        setSelectedOrderId(orders[0]?.id ?? null);
+                      }
+                    } catch (e) {
+                      console.error('Save failed', e);
+                      alert('Erro ao salvar pedido');
+                    }
+                  }}>
                     <Save className="mr-2 h-4 w-4" />Criar pedido
                   </Button>
                 </div>
@@ -237,9 +345,10 @@ export default function OrdersPage() {
                       <TableHead>Material</TableHead>
                       <TableHead>Cor</TableHead>
                       <TableHead className="text-right">Qtd. solicitada</TableHead>
+                      <TableHead>Faltante</TableHead>
                       <TableHead className="text-right">Em estoque</TableHead>
-                      <TableHead className="text-right">Reservado</TableHead>
-                      <TableHead className="text-right">Disponivel</TableHead>
+                      <TableHead className="text-right">Reservado (outros pedidos)</TableHead>
+                      <TableHead className="text-right">Disponivel para este pedido</TableHead>
                       <TableHead className="text-right">Qtd. reservada (estoque)</TableHead>
                       <TableHead className="text-right">Qtd. para produzir</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
@@ -248,7 +357,7 @@ export default function OrdersPage() {
                   <TableBody>
                     {selectedOrder.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-20 text-center text-muted-foreground">
+                        <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
                           Adicione itens para iniciar a reserva.
                         </TableCell>
                       </TableRow>
@@ -258,6 +367,9 @@ export default function OrdersPage() {
                         const reservations = db.stockReservations.filter(
                           (reservation) => reservation.orderId === selectedOrder.id && reservation.materialId === item.materialId
                         );
+                        const currentOrderReservedForMaterial = reservations.reduce((acc, reservation) => acc + reservation.qty, 0);
+                        const reservedByOtherOrders = Math.max(0, stock.reservedTotal - currentOrderReservedForMaterial);
+                        const availableForThisOrder = Math.max(0, stock.onHand - reservedByOtherOrders);
 
                         return (
                           <React.Fragment key={item.id}>
@@ -276,20 +388,44 @@ export default function OrdersPage() {
                                 <Input
                                   type="number"
                                   value={item.qtyRequested}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
+                                    const raw = e.target.value;
+                                    const qty = raw === '' ? 0 : Number(raw);
                                     updateOrderItemField(selectedOrder.id, item.id, {
-                                      qtyRequested: Number(e.target.value),
-                                    })
-                                  }
-                                  onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value))}
+                                      qtyRequested: Number.isFinite(qty) ? qty : 0,
+                                    });
+                                    if (raw !== '' && Number.isFinite(qty)) {
+                                      onQtyBlurReserve(selectedOrder.id, item.id, qty);
+                                    }
+                                  }}
+                                  onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value || 0))}
                                   className="ml-auto w-24 text-right"
                                 />
                               </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={item.shortageAction ?? 'PRODUCE'}
+                                  onValueChange={(value) => {
+                                    updateOrderItemField(selectedOrder.id, item.id, { shortageAction: value as 'PRODUCE' | 'BUY' });
+                                  }}
+                                >
+                                  <SelectTrigger className="w-28">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="PRODUCE">Produzir</SelectItem>
+                                    <SelectItem value="BUY">Comprar</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
                               <TableCell className="text-right">{stock.onHand}</TableCell>
-                              <TableCell className="text-right">{stock.reservedTotal}</TableCell>
-                              <TableCell className="text-right">{stock.available}</TableCell>
+                              <TableCell className="text-right">{reservedByOtherOrders}</TableCell>
+                              <TableCell className="text-right">{availableForThisOrder}</TableCell>
                               <TableCell className="text-right font-semibold text-primary">{item.qtyReservedFromStock}</TableCell>
-                              <TableCell className="text-right font-semibold text-amber-600">{item.qtyToProduce}</TableCell>
+                              <TableCell className="text-right font-semibold text-amber-600">
+                                {(item.shortageAction ?? 'PRODUCE') === 'PRODUCE' ? item.qtyToProduce : 0}
+                                {(item.shortageAction ?? 'PRODUCE') === 'BUY' ? ` (compra ${item.qtyToBuy ?? 0})` : ''}
+                              </TableCell>
                               <TableCell className="text-center">
                                 <Button variant="ghost" onClick={() => removeOrderItem(selectedOrder.id, item.id)}>
                                   <Trash2 className="h-4 w-4" />
@@ -297,7 +433,7 @@ export default function OrdersPage() {
                               </TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell colSpan={9} className="bg-muted/30">
+                              <TableCell colSpan={10} className="bg-muted/30">
                                 <div className="grid gap-3 md:grid-cols-2">
                                   <div className="space-y-2">
                                     <Label>Condicao especifica do item</Label>

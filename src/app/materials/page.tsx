@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,12 +16,14 @@ import {
 import { Form, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useForm } from 'react-hook-form';
-import { usePilotStore } from '@/lib/pilot/store';
+import { useEffect, useState } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Boxes } from 'lucide-react';
+import { Boxes, Edit, Trash } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 type MaterialFormValues = {
   name: string;
+  sku?: string;
   standardUom: string;
   minStock: number;
   reorderPoint: number;
@@ -31,15 +33,32 @@ type MaterialFormValues = {
 };
 
 export default function MaterialsPage() {
-  const db = usePilotStore((s) => s.db);
-  const addMaterial = usePilotStore((s) => s.addMaterial);
-  const updateMaterial = usePilotStore((s) => s.updateMaterial);
+  const [db, setDb] = useState<any>({ materials: [] })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const res = await fetch('/api/materials')
+        const data = await res.json()
+        if (mounted) setDb({ materials: data })
+      } catch (err) {
+        console.error('Failed to load materials', err)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<string | null>(null);
 
   const defaultValues: MaterialFormValues = {
     name: '',
+    sku: '',
     standardUom: 'EA',
     minStock: 0,
     reorderPoint: 0,
@@ -47,6 +66,8 @@ export default function MaterialsPage() {
     productionTimePerUnitMinutes: 0,
     colorOptions: '',
   };
+
+  const { toast } = useToast();
 
   const form = useForm<MaterialFormValues>({ defaultValues });
 
@@ -57,9 +78,10 @@ export default function MaterialsPage() {
   };
 
   const openEdit = (id: string) => {
-    const m = db.materials.find((x) => x.id === id);
+    const m = db.materials.find((x: any) => x.id === id);
     if (!m) return;
     form.reset({
+      sku: m.sku || '',
       name: m.name,
       standardUom: m.standardUom,
       minStock: m.minStock,
@@ -83,14 +105,73 @@ export default function MaterialsPage() {
       colorOptions: values.colorOptions ? values.colorOptions.split(',').map((s) => s.trim()).filter(Boolean) : [],
     };
 
-    if (editing) {
-      updateMaterial(editing, payload);
-    } else {
-      addMaterial(payload);
-    }
-
-    setOpen(false);
+    (async () => {
+      try {
+        if (editing) {
+          // editing id like M-1
+          const res = await fetch(`/api/materials/${editing}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, sku: form.getValues('sku') }),
+          })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            const msg = err?.errors ? Object.values(err.errors).join('; ') : err?.error || 'Falha ao atualizar'
+            toast({ title: 'Erro', description: String(msg), variant: 'destructive' })
+            return
+          }
+          toast({ title: 'Material atualizado', description: 'As alterações foram salvas', variant: 'success' })
+        } else {
+          const res = await fetch('/api/materials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...payload, sku: form.getValues('sku') }),
+          })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            const msg = err?.errors ? Object.values(err.errors).join('; ') : err?.error || 'Falha ao criar'
+            toast({ title: 'Erro', description: String(msg), variant: 'destructive' })
+            return
+          }
+          toast({ title: 'Material criado', description: 'Novo material salvo no banco', variant: 'success' })
+        }
+        // refresh list
+        setLoading(true)
+        const r2 = await fetch('/api/materials')
+        const data = await r2.json()
+        setDb({ materials: data })
+      } catch (err) {
+        console.error('Save failed', err)
+        toast({ title: 'Erro', description: 'Ocorreu um erro inesperado', variant: 'destructive' })
+      } finally {
+        // Only close dialog if loading finished and no errors (list refreshed)
+        setOpen(false)
+        setLoading(false)
+      }
+    })()
   };
+
+  const deleteMaterial = async (id: string) => {
+    if (!confirm('Remover este material?')) return
+    try {
+      const res = await fetch(`/api/materials/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        const msg = err?.error || 'Falha ao remover'
+        toast({ title: 'Erro', description: String(msg), variant: 'destructive' })
+        return
+      }
+      toast({ title: 'Material removido', description: 'Material excluído com sucesso', variant: 'success' })
+      setLoading(true)
+      const r2 = await fetch('/api/materials')
+      const data = await r2.json()
+      setDb({ materials: data })
+    } catch (e) {
+      toast({ title: 'Erro', description: 'Erro ao remover material', variant: 'destructive' })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <>
@@ -118,7 +199,13 @@ export default function MaterialsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {db.materials.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="border-none py-8">
+                    <EmptyState title="Carregando materiais..." description="Aguarde enquanto os dados chegam do servidor." className="min-h-[120px]" />
+                  </TableCell>
+                </TableRow>
+              ) : db.materials.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="border-none py-8">
                     <EmptyState icon={Boxes} title="Nenhum material cadastrado" description="Cadastre um novo material para iniciar o planejamento." className="min-h-[120px]" />
@@ -136,9 +223,12 @@ export default function MaterialsPage() {
                     <TableCell className="text-right">{m.reorderPoint}</TableCell>
                     <TableCell className="text-right">{m.setupTimeMinutes}</TableCell>
                     <TableCell className="text-right">{m.productionTimePerUnitMinutes}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => openEdit(m.id)}>
-                        Editar
+                    <TableCell className="text-right flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(m.id)} aria-label={`Editar ${m.name}`}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteMaterial(m.id)} aria-label={`Remover ${m.name}`}>
+                        <Trash className="h-4 w-4 text-destructive" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -162,6 +252,14 @@ export default function MaterialsPage() {
                 <FormLabel>Nome</FormLabel>
                 <FormControl>
                   <Input {...form.register('name', { required: true })} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+
+              <FormItem>
+                <FormLabel>SKU (opcional)</FormLabel>
+                <FormControl>
+                  <Input {...form.register('sku')} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

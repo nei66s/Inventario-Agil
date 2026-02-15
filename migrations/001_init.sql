@@ -1,0 +1,41 @@
+-- Initial schema for inventory app
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id SERIAL PRIMARY KEY,
+  version TEXT NOT NULL UNIQUE,
+  applied_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS warehouses (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  location TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS materials (
+  id SERIAL PRIMARY KEY,
+  sku TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  unit TEXT,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id SERIAL PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'draft',
+  total NUMERIC(12,2) DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id SERIAL PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  material_id INTEGER NOT NULL REFERENCES materials(id) ON DELETE RESTRICT,
+  quantity NUMERIC(12,4) NOT NULL DEFAULT 0,
+  unit_price NUMERIC(12,4) DEFAULT 0
+);
+
+COMMIT;

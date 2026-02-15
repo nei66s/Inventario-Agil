@@ -26,6 +26,7 @@ export default function InventoryPage() {
   const markNotification = usePilotStore((state) => state.markNotification);
   const busyReceipts = usePilotStore((state) => state.busyReceipts);
   const { stockView } = usePilotDerived();
+  const syncWithBackend = usePilotStore((state) => state.syncWithBackend);
 
   const receiptsDraft = db.inventoryReceipts.filter((item) => item.status === 'DRAFT');
   const receiptsPosted = db.inventoryReceipts.filter((item) => item.status === 'POSTED');
@@ -34,6 +35,10 @@ export default function InventoryPage() {
     const autoAllocate = window.confirm('Autoalocar agora?\nOK = Sim / Cancelar = Nao');
     postInventoryReceipt(receiptId, autoAllocate);
   };
+
+  React.useEffect(() => {
+    syncWithBackend();
+  }, [syncWithBackend]);
 
   return (
     <Tabs defaultValue="stock" className="space-y-4">
@@ -47,8 +52,17 @@ export default function InventoryPage() {
       <TabsContent value="stock">
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline">Saldo de estoque</CardTitle>
-            <CardDescription>Em estoque, reservado e disponivel calculados em tempo real no piloto.</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="font-headline">Saldo de estoque</CardTitle>
+                <CardDescription>Em estoque, reservado e disponivel calculados em tempo real no piloto.</CardDescription>
+              </div>
+              <div>
+                <Button size="sm" onClick={() => { syncWithBackend(); }}>
+                  Sincronizar
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>

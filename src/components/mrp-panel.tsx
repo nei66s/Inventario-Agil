@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePilotDerived, usePilotStore } from '@/lib/pilot/store';
 import { Button } from '@/components/ui/button';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 type InventoryReceipt = { postedAt?: string; items?: { materialId?: string; qty?: number }[] };
@@ -115,8 +116,17 @@ export default function MrpPanel() {
                       <TableCell className="text-right">{s.material?.reorderPoint}</TableCell>
                       <TableCell className="text-right">{Math.max((s.material?.reorderPoint ?? 0) - s.available, 0)}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" onClick={() => toggleExpand(s.materialId)}>
-                          {expandedMaterialId === s.materialId ? 'Fechar' : 'Ver'}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleExpand(s.materialId)}
+                          aria-label={expandedMaterialId === s.materialId ? 'Fechar' : 'Ver'}
+                        >
+                          {expandedMaterialId === s.materialId ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
                         </Button>
                       </TableCell>
                     </TableRow>

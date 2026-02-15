@@ -13,6 +13,7 @@ import {
   Search,
   Shield,
   ShoppingCart,
+  UserCircle2,
   Sun,
   Warehouse,
   Trash2,
@@ -46,7 +47,6 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import NotificationCenter from './notifications/notification-center';
 import { usePilotDerived, usePilotStore } from '@/lib/pilot/store';
-import { Role } from '@/lib/pilot/types';
 import { Input } from './ui/input';
 import { roleLabel } from '@/lib/pilot/i18n';
 
@@ -59,9 +59,8 @@ const navItems = [
   { href: '/production', icon: Factory, label: 'Producao' },
   { href: '/picking', icon: PackageCheck, label: 'Separacao' },
   { href: '/admin', icon: Shield, label: 'Administracao' },
+  { href: '/profile', icon: UserCircle2, label: 'Perfil' },
 ];
-
-const roles: Role[] = ['Admin', 'Manager', 'Seller', 'Input Operator', 'Production Operator', 'Picker'];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -70,7 +69,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const db = usePilotStore((state) => state.db);
   const currentUserId = usePilotStore((state) => state.currentUserId);
   const currentRole = usePilotStore((state) => state.currentRole);
-  const setCurrentRole = usePilotStore((state) => state.setCurrentRole);
   const runMaintenance = usePilotStore((state) => state.runMaintenance);
   const { expiringSoon } = usePilotDerived();
 
@@ -117,10 +115,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarGroup>
             <SidebarGroupLabel>
               Painel
-              <span className="ml-2 inline-flex items-center gap-2">
-                <Badge variant="secondary">{db.orders.length}</Badge>
-                {expiringSoon > 0 ? <Badge variant="warning">{expiringSoon}</Badge> : null}
-              </span>
+                {mounted ? (
+                  <div className="ml-2 inline-flex items-center gap-2">
+                    <Badge variant="secondary">{db.orders.length}</Badge>
+                    {expiringSoon > 0 ? <Badge variant="warning">{expiringSoon}</Badge> : null}
+                  </div>
+                ) : null}
             </SidebarGroupLabel>
             <SidebarMenu>
               <SidebarMenuItem key="/dashboard">
@@ -169,7 +169,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarGroupLabel>Operacoes</SidebarGroupLabel>
             <SidebarMenu>
               {navItems
-                .filter((i) => i.href !== '/materials' && i.href !== '/admin' && i.href !== '/orders' && i.href !== '/orders/trash')
+                .filter(
+                  (i) =>
+                    i.href !== '/materials' &&
+                    i.href !== '/admin' &&
+                    i.href !== '/orders' &&
+                    i.href !== '/orders/trash' &&
+                    i.href !== '/dashboard'
+                )
                 .map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
@@ -187,7 +194,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarGroupLabel>Administracao</SidebarGroupLabel>
             <SidebarMenu>
               {navItems
-                .filter((i) => i.href === '/materials' || i.href === '/admin')
+                .filter((i) => i.href === '/materials' || i.href === '/admin' || i.href === '/profile')
                 .map((item) => (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
@@ -254,17 +261,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-60" side="bottom" align="end">
-              <DropdownMenuLabel>Simulacao de Perfil</DropdownMenuLabel>
-              {roles.map((role) => (
-                <DropdownMenuItem key={role} onClick={() => setCurrentRole(role)}>
-                  <span>{roleLabel(role)}</span>
-                  {role === currentRole ? (
-                    <Badge className="ml-auto" variant="secondary">
-                      Ativo
-                    </Badge>
-                  ) : null}
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuLabel className="space-y-0.5">
+                <div>{user?.name ?? 'Usuario'}</div>
+                <div className="text-xs font-normal text-muted-foreground">{roleLabel(currentRole)}</div>
+              </DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/profile">
+                  <UserCircle2 className="mr-2 h-4 w-4" />
+                  Meu perfil
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/">

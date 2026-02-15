@@ -35,45 +35,63 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-md space-y-8">
-        <Card className="mx-auto max-w-sm">
-          <CardHeader className="text-center">
-            <Logo className="mx-auto mb-4" />
-            <CardTitle className="font-headline text-3xl">Inventário Ágil</CardTitle>
-            <CardDescription>Acesso corporativo para simulacao de fluxos da cadeia de suprimentos.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="grid gap-5">
-              <div className="grid gap-3">
-                <Label htmlFor="email">E-mail</Label>
-                <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+    <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background px-4 py-12">
+      <main className="w-full">
+        <section className="hero mx-auto mb-8">
+          <div className="hero-inner">
+            <div className="max-w-2xl">
+              <h1 className="hero-title">Inventário Ágil para Cadeia de Suprimentos</h1>
+              <p className="hero-subtitle">Gerencie pedidos, produção e picking com visibilidade em tempo real e fluxos de trabalho otimizados.</p>
+              <div className="hero-ctas">
+                <Button onClick={() => router.push('/dashboard')}>Abrir Painel</Button>
+                <Button onClick={() => router.push('/materials')} className="bg-white text-primary">Explorar materiais</Button>
               </div>
-              <div className="grid gap-3">
-                <Label htmlFor="password">Senha</Label>
-                <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-              </div>
-              <div className="grid gap-3 border-t border-border/70 pt-4">
-                <Label>Perfil para simular</Label>
-                <Select value={role} onValueChange={(value) => setRole(value as Role)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Admin">{roleLabel('Admin')}</SelectItem>
-                    <SelectItem value="Manager">{roleLabel('Manager')}</SelectItem>
-                    <SelectItem value="Seller">{roleLabel('Seller')}</SelectItem>
-                    <SelectItem value="Input Operator">{roleLabel('Input Operator')}</SelectItem>
-                    <SelectItem value="Production Operator">{roleLabel('Production Operator')}</SelectItem>
-                    <SelectItem value="Picker">{roleLabel('Picker')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full">Entrar</Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+            <div className="hidden md:block">
+              <Logo className="w-40 h-40" />
+            </div>
+          </div>
+        </section>
+
+        <div className="w-full max-w-md mx-auto">
+          <Card className="mx-auto max-w-sm">
+            <CardHeader className="text-center">
+              <Logo className="mx-auto mb-4" />
+              <CardTitle className="font-headline text-3xl">Inventário Ágil</CardTitle>
+              <CardDescription>Acesso corporativo para simulacao de fluxos da cadeia de suprimentos.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="grid gap-5">
+                <div className="grid gap-3">
+                  <Label htmlFor="email">E-mail</Label>
+                  <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="grid gap-3">
+                  <Label htmlFor="password">Senha</Label>
+                  <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                </div>
+                <div className="grid gap-3 border-t border-border/70 pt-4">
+                  <Label>Perfil para simular</Label>
+                  <Select value={role} onValueChange={(value) => setRole(value as Role)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Admin">{roleLabel('Admin')}</SelectItem>
+                      <SelectItem value="Manager">{roleLabel('Manager')}</SelectItem>
+                      <SelectItem value="Seller">{roleLabel('Seller')}</SelectItem>
+                      <SelectItem value="Input Operator">{roleLabel('Input Operator')}</SelectItem>
+                      <SelectItem value="Production Operator">{roleLabel('Production Operator')}</SelectItem>
+                      <SelectItem value="Picker">{roleLabel('Picker')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="submit" className="w-full">Entrar</Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }

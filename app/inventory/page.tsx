@@ -27,6 +27,7 @@ export default function InventoryPage() {
   const countOpenDemands = usePilotStore((state) => state.countOpenDemands);
   const markNotification = usePilotStore((state) => state.markNotification);
   const busyReceipts = usePilotStore((state) => state.busyReceipts);
+  const syncWithBackend = usePilotStore((state) => state.syncWithBackend);
   const { stockView } = usePilotDerived();
 
   const receiptsDraft = db.inventoryReceipts.filter((item) => item.status === 'DRAFT');
@@ -36,6 +37,10 @@ export default function InventoryPage() {
     const autoAllocate = window.confirm('Autoalocar agora?\nOK = Sim / Cancelar = Nao');
     postInventoryReceipt(receiptId, autoAllocate);
   };
+
+  React.useEffect(() => {
+    syncWithBackend();
+  }, [syncWithBackend]);
 
   return (
     <Tabs defaultValue="stock" className="space-y-4">

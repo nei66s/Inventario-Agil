@@ -44,6 +44,9 @@ export default function OrdersPage() {
   const removeOrderItem = usePilotStore((state) => state.removeOrderItem);
 
   const currentUserId = usePilotStore((state) => state.currentUserId);
+  const setOrders = usePilotStore((state) => state.setOrders);
+  const setMaterials = usePilotStore((state) => state.setMaterials);
+  const [materialsStatus, setMaterialsStatus] = React.useState<string | null>(null);
 
   const [mainView, setMainView] = React.useState<'open' | 'finalized'>('open');
   const [subView, setSubView] = React.useState<'mine' | 'all'>('mine');
@@ -51,7 +54,63 @@ export default function OrdersPage() {
 
   React.useEffect(() => {
     setHydrated(true);
+    // Try to load server-backed orders and materials and replace pilot store if available
+    (async () => {
+      try {
+        const [oRes, mRes] = await Promise.allSettled([fetch('/api/orders'), fetch('/api/materials')]);
+
+        if (oRes.status === 'fulfilled' && oRes.value.ok) {
+          try {
+            const orders = await oRes.value.json();
+            if (Array.isArray(orders) && orders.length > 0) setOrders(orders);
+          } catch {}
+        }
+
+        if (mRes.status === 'fulfilled' && mRes.value.ok) {
+          try {
+            const materials = await mRes.value.json();
+            if (Array.isArray(materials) && materials.length > 0) {
+              setMaterials(materials);
+              setMaterialsStatus(`${materials.length} materiais carregados do servidor`);
+            } else {
+              setMaterialsStatus('Nenhum material retornado do servidor');
+            }
+            console.debug('server materials', materials);
+          } catch (err) {
+            console.error('erro parse materials', err);
+            setMaterialsStatus('Erro ao interpretar materiais do servidor');
+          }
+        } else if (mRes.status === 'fulfilled') {
+          setMaterialsStatus('Falha ao buscar /api/materials');
+        }
+      } catch {
+        // ignore
+      }
+    })();
   }, []);
+
+  const reloadMaterials = async () => {
+    try {
+      setMaterialsStatus('Carregando...');
+      const res = await fetch('/api/materials');
+      if (!res.ok) {
+        setMaterialsStatus(`Erro HTTP ${res.status}`);
+        console.error('GET /api/materials failed', res.status);
+        return;
+      }
+      const materials = await res.json();
+      console.debug('reload materials', materials);
+      if (Array.isArray(materials)) {
+        setMaterials(materials);
+        setMaterialsStatus(`${materials.length} materiais carregados`);
+      } else {
+        setMaterialsStatus('Resposta inesperada');
+      }
+    } catch (err) {
+      console.error(err);
+      setMaterialsStatus('Erro ao buscar materiais');
+    }
+  };
 
   // Read URL search params only on the client after mount to avoid
   // Next.js prerender/runtime errors related to `useSearchParams()`.
@@ -114,7 +173,13 @@ export default function OrdersPage() {
   if (!hydrated) return <div className="min-h-[420px]" />;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+    <div className="relative">
+      <div className="fixed top-4 right-4 z-50 flex items-center gap-2 rounded border border-border bg-background p-2 shadow">
+        <div className="text-sm text-muted-foreground">{materialsStatus ?? 'Materiais: ?'}</div>
+        <button className="btn btn-sm ml-2 rounded bg-primary/10 px-2 py-1 text-sm" onClick={() => reloadMaterials()}>Recarregar materiais</button>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between">
@@ -191,7 +256,41 @@ export default function OrdersPage() {
                     <Button variant="outline" onClick={() => { deleteOrder(selectedOrder.id); setSelectedOrderId(null); }}>
                       <Trash2 className="mr-2 h-4 w-4" />Enviar para lixeira
                     </Button>
-                    <Button onClick={() => saveOrder(selectedOrder.id)}>
+                    <Button onClick={async () => {
+                      try {
+                        const order = db.orders.find((o) => o.id === selectedOrder.id);
+                        if (!order) return;
+                        const payload = {
+                          status: (order.status ?? 'draft').toLowerCase(),
+                          items: order.items.map((it: any) => ({
+                            materialId: Number(String(it.materialId).replace(/^M-/, '')),
+                            quantity: Number(it.qtyRequested || 0),
+                            unitPrice: Number(it.unitPrice || 0),
+                          })),
+                        };
+
+                        const res = await fetch('/api/orders/submit', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(payload),
+                        });
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({}));
+                          alert(err?.error || 'Falha ao criar pedido');
+                          return;
+                        }
+                        // refresh orders from server
+                        const r2 = await fetch('/api/orders');
+                        if (r2.ok) {
+                          const orders = await r2.json();
+                          setOrders(orders);
+                          setSelectedOrderId(orders[0]?.id ?? null);
+                        }
+                      } catch (e) {
+                        console.error('Save failed', e);
+                        alert('Erro ao salvar pedido');
+                      }
+                    }}>
                       <Save className="mr-2 h-4 w-4" />Criar pedido
                     </Button>
                 </div>
@@ -234,14 +333,16 @@ export default function OrdersPage() {
                     <SelectValue placeholder="Adicionar material" />
                   </SelectTrigger>
                   <SelectContent>
-                    {db.materials.map((material) => (
-                      <SelectItem key={material.id} value={material.id}>
-                        {material.id} - {material.name}
-                      </SelectItem>
-                    ))}
+                      {db.materials.map((material) => (
+                        <SelectItem key={material.id} value={material.id}>
+                          {material.id} - {material.description ?? material.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" onClick={() => heartbeatOrder(selectedOrder.id)}>Estender reserva por +5 min</Button>
+                  <Button variant="outline" onClick={() => heartbeatOrder(selectedOrder.id)}>Estender reserva por +5 min</Button>
+                  <div className="ml-4 text-sm text-muted-foreground">{materialsStatus ?? ''}</div>
+                  <Button variant="ghost" className="ml-2" onClick={() => reloadMaterials()}>Recarregar materiais</Button>
               </div>
 
               <div className="max-h-[360px] overflow-auto">
@@ -290,12 +391,8 @@ export default function OrdersPage() {
                                 <Input
                                   type="number"
                                   value={item.qtyRequested}
-                                  onChange={(e) =>
-                                    updateOrderItemField(selectedOrder.id, item.id, {
-                                      qtyRequested: Number(e.target.value),
-                                    })
-                                  }
-                                  onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value))}
+                                  onChange={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value || 0))}
+                                  onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value || 0))}
                                   className="ml-auto w-24 text-right"
                                 />
                               </TableCell>

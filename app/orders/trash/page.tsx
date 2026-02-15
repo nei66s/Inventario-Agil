@@ -24,6 +24,7 @@ export default function OrdersTrashPage() {
   const db = usePilotStore((s) => s.db);
   const restoreOrder = usePilotStore((s) => s.restoreOrder);
   const purgeOrder = usePilotStore((s) => s.purgeOrder);
+  const setOrders = usePilotStore((s) => s.setOrders);
 
   const trashedOrders = React.useMemo(() => db.orders.filter((o) => o.trashedAt), [db.orders]);
 
@@ -107,10 +108,60 @@ export default function OrdersTrashPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { restoreOrder(selectedOrder.id); setSelectedOrderId(null); }}>
+                  <Button variant="outline" onClick={async () => {
+                    try {
+                      if (/^O-\d+$/.test(String(selectedOrder.id))) {
+                        const res = await fetch(`/api/orders/${selectedOrder.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ trashed: false }),
+                        });
+                        if (!res.ok) {
+                          const e = await res.json().catch(() => ({}));
+                          alert(e?.error || 'Falha ao restaurar pedido');
+                          return;
+                        }
+                        const r2 = await fetch('/api/orders');
+                        if (r2.ok) {
+                          const orders = await r2.json();
+                          setOrders(orders);
+                          setSelectedOrderId(null);
+                        }
+                      } else {
+                        restoreOrder(selectedOrder.id);
+                        setSelectedOrderId(null);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert('Erro ao restaurar pedido');
+                    }
+                  }}>
                     <RotateCcw className="mr-2 h-4 w-4" />Restaurar
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={() => { purgeOrder(selectedOrder.id); setSelectedOrderId(null); }}>
+                  <Button size="sm" variant="destructive" onClick={async () => {
+                    try {
+                      if (/^O-\d+$/.test(String(selectedOrder.id))) {
+                        const res = await fetch(`/api/orders/${selectedOrder.id}`, { method: 'DELETE' });
+                        if (!res.ok) {
+                          const e = await res.json().catch(() => ({}));
+                          alert(e?.error || 'Falha ao excluir pedido');
+                          return;
+                        }
+                        const r2 = await fetch('/api/orders');
+                        if (r2.ok) {
+                          const orders = await r2.json();
+                          setOrders(orders);
+                          setSelectedOrderId(null);
+                        }
+                      } else {
+                        purgeOrder(selectedOrder.id);
+                        setSelectedOrderId(null);
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      alert('Erro ao excluir pedido');
+                    }
+                  }}>
                     <Trash2 className="mr-2 h-4 w-4" />Excluir permanentemente
                   </Button>
                 </div>

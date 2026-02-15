@@ -91,9 +91,11 @@ export type OrderItem = {
   materialName: string;
   uom: string;
   color: string;
+  shortageAction?: 'PRODUCE' | 'BUY';
   qtyRequested: number;
   qtyReservedFromStock: number;
   qtyToProduce: number;
+  qtyToBuy?: number;
   qtySeparated: number;
   itemCondition?: string;
   conditionTemplateName?: string;

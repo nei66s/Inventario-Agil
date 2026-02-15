@@ -31,6 +31,14 @@ const repository = new LocalPilotRepository();
 function initialDb(): PilotDb {
   if (typeof window === 'undefined') return buildSeedData();
   const loaded = repository.load();
+  if (!Array.isArray(loaded.users) || loaded.users.length === 0) {
+    loaded.users = buildSeedData().users;
+  }
+  // Remove seeded/mock materials so the app relies on the real database.
+  // Keep other seeded data intact for now.
+  loaded.materials = [];
+  loaded.stockBalances = [];
+  loaded.stockReservations = [];
   initializeState(loaded);
   repository.save(loaded);
   return loaded;
@@ -41,7 +49,12 @@ type PilotState = {
   currentUserId: string;
   currentRole: Role;
   busyReceipts: Record<string, boolean>;
+  syncWithBackend: () => Promise<void>;
+  setOrders: (orders: PilotDb['orders']) => void;
+  setMaterials: (materials: PilotDb['materials']) => void;
   setCurrentRole: (role: Role) => void;
+  setCurrentUser: (userId: string) => void;
+  updateCurrentUserProfile: (payload: { name?: string; email?: string; avatarUrl?: string }) => void;
   resetDemoData: () => void;
   createDraftOrder: () => string;
   deleteOrder: (orderId: string) => void;
@@ -53,7 +66,13 @@ type PilotState = {
   updateOrderItemField: (
     orderId: string,
     itemId: string,
-    payload: { qtyRequested?: number; color?: string; itemCondition?: string; conditionTemplateName?: string }
+    payload: {
+      qtyRequested?: number;
+      color?: string;
+      shortageAction?: 'PRODUCE' | 'BUY';
+      itemCondition?: string;
+      conditionTemplateName?: string
+    }
   ) => void;
   updateOrderClientName: (orderId: string, clientName: string) => void;
   addItemCondition: (orderId: string, itemId: string) => void;
@@ -115,10 +134,58 @@ export const usePilotStore = create<PilotState>((set, get) => ({
     if (!user) return;
     set({ currentRole: role, currentUserId: user.id });
   },
+  setCurrentUser: (userId) => {
+    const user = get().db.users.find((item) => item.id === userId);
+    if (!user) return;
+    set({ currentUserId: user.id, currentRole: user.role });
+  },
+  updateCurrentUserProfile: (payload) => {
+    const state = get();
+    const db = structuredClone(state.db);
+    const user = db.users.find((item) => item.id === state.currentUserId);
+    if (!user) return;
+
+    if (payload.name !== undefined) {
+      const next = payload.name.trim();
+      if (next) user.name = next;
+    }
+    if (payload.email !== undefined) {
+      const next = payload.email.trim();
+      if (next) user.email = next;
+    }
+    if (payload.avatarUrl !== undefined) {
+      user.avatarUrl = payload.avatarUrl.trim() || undefined;
+    }
+
+    persist(db);
+    set({ db });
+  },
   resetDemoData: () => {
     const db = repository.reset();
+    if (!db.users.length) {
+      db.users = buildSeedData().users;
+    }
     initializeState(db);
-    set({ db, currentRole: defaultCurrentUserRole, currentUserId: 'usr-seller', busyReceipts: {} });
+    const nextUser = db.users.find((item) => item.role === defaultCurrentUserRole) ?? db.users[0];
+    if (!nextUser) return;
+    set({ db, currentRole: nextUser.role, currentUserId: nextUser.id, busyReceipts: {} });
+  },
+  setOrders: (orders) => {
+    const db = structuredClone(get().db);
+    db.orders = orders;
+    const activeOrderIds = new Set(db.orders.map((o) => o.id));
+    db.productionTasks = db.productionTasks.filter((task) => activeOrderIds.has(task.orderId));
+    db.stockReservations = db.stockReservations.filter((reservation) => activeOrderIds.has(reservation.orderId));
+    initializeState(db);
+    repository.save(db);
+    set({ db });
+  },
+  setMaterials: (materials) => {
+    const db = structuredClone(get().db);
+    db.materials = materials;
+    initializeState(db);
+    repository.save(db);
+    set({ db });
   },
   createDraftOrder: () => {
     const state = get();
@@ -185,8 +252,14 @@ export const usePilotStore = create<PilotState>((set, get) => ({
 
     if (payload.qtyRequested !== undefined) row.qtyRequested = Math.max(0, payload.qtyRequested);
     if (payload.color !== undefined) row.color = payload.color;
+    if (payload.shortageAction !== undefined) row.shortageAction = payload.shortageAction;
     if (payload.itemCondition !== undefined) row.itemCondition = payload.itemCondition;
     if (payload.conditionTemplateName !== undefined) row.conditionTemplateName = payload.conditionTemplateName;
+
+    const shortage = Math.max(0, row.qtyRequested - row.qtyReservedFromStock);
+    const shouldProduce = (row.shortageAction ?? 'PRODUCE') === 'PRODUCE';
+    row.qtyToProduce = shouldProduce ? shortage : 0;
+    row.qtyToBuy = shouldProduce ? 0 : shortage;
 
     heartbeatOrderReservations(db, orderId);
     persist(db);
@@ -376,7 +449,29 @@ export const usePilotStore = create<PilotState>((set, get) => ({
   countOpenDemands: (materialId) => {
     return countOpenDemandsByMaterial(get().db, materialId);
   },
+  syncWithBackend: async () => {
+    try {
+      const res = await fetch('/api/inventory');
+      if (!res.ok) return;
+      const data = await res.json();
+      const db = structuredClone(get().db);
+      if (data.materials) db.materials = data.materials;
+      if (data.stockBalances) db.stockBalances = data.stockBalances;
+      if (data.stockReservations) db.stockReservations = data.stockReservations;
+      if (!db.users.length) db.users = buildSeedData().users;
+      initializeState(db);
+      persist(db);
+      set({ db });
+    } catch (err) {
+      console.error('syncWithBackend failed', err);
+    }
+  },
 }));
+
+// NOTE: Removed automatic replacement of local mock materials with server data.
+// The materials UI (`src/app/materials/page.tsx`) fetches `/api/materials` directly
+// and updates its own state. This prevents the UI from showing seeded mock data
+// first and then swapping it out.
 
 export function usePilotDerived() {
   const db = usePilotStore((state) => state.db);

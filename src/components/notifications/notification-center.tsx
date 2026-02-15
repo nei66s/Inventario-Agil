@@ -34,6 +34,9 @@ export function NotificationCenter() {
     db.notifications.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   );
 
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
   React.useEffect(() => {
     setItems(db.notifications.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
   }, [db.notifications]);
@@ -57,9 +60,8 @@ export function NotificationCenter() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0" aria-label="Notificacoes">
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 ? (
+          {mounted && unreadCount > 0 ? (
             <span
-              suppressHydrationWarning
               className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white"
             >
               {unreadCount}
@@ -72,7 +74,7 @@ export function NotificationCenter() {
         <div className="flex items-center justify-between px-2 py-1">
           <div>
             <h3 className="text-sm font-semibold">Notificacoes</h3>
-            <p className="text-xs text-muted-foreground">{unreadCount} nao lida(s)</p>
+            <p className="text-xs text-muted-foreground">{mounted ? `${unreadCount} nao lida(s)` : ''}</p>
           </div>
           {unreadCount > 0 ? (
             <button className="text-xs font-medium text-primary hover:underline" onClick={handleMarkAll}>

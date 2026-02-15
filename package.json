@@ -16,6 +16,8 @@
     "start": "next start",
     "lint": "eslint src eslint.config.mjs next.config.ts tailwind.config.ts --ext .ts,.tsx,.mjs",
     "typecheck": "tsc --noEmit"
+    ,
+    "clear-db": "node ./scripts/clear-db.js"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.20.0",
@@ -54,17 +56,19 @@
     "lucide-react": "^0.475.0",
     "next": "15.5.9",
     "patch-package": "^8.0.0",
+    "pg": "^8.18.0",
+    "pm2": "^5.3.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.3",
     "react-dom": "^19.2.1",
     "react-hook-form": "^7.54.2",
     "recharts": "^2.15.1",
+    "swr": "^2.4.0",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.24.2",
-    "zustand": "^5.0.11",
-    "pm2": "^5.3.0"
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@types/node": "^20",
