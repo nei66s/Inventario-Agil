@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import BackendSync from '@/components/backend-sync';
 
 export const metadata: Metadata = {
-  title: 'São José Cordas',
+  title: 'Inventário Ágil',
   description: 'Gerencie eficientemente sua cadeia de suprimentos, do pedido a entrega.',
 };
 

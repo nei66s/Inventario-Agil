@@ -312,25 +312,27 @@ const Sidebar = React.forwardRef<
         />
         <div
           className={cn(
-            "duration-200 fixed inset-y-0 z-40 hidden h-svh w-[--sidebar-width] transition-[left,right,width] ease-linear md:flex",
+            "duration-200 fixed inset-y-0 z-40 hidden h-svh w-[--sidebar-width] transition-[left,right,width,transform] ease-linear md:flex",
             side === "left"
-              ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
-              : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
+              ? "left-0 group-data-[collapsible=offcanvas]:-translate-x-[var(--sidebar-width)]"
+              : "right-0 group-data-[collapsible=offcanvas]:translate-x-[var(--sidebar-width)]",
             // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            "group-data-[collapsible=offcanvas]:pointer-events-none group-data-[collapsible=offcanvas]:opacity-0 group-data-[collapsible=offcanvas]:shadow-none",
             className
           )}
           {...props}
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col rounded-xl border border-sidebar-border/80 bg-sidebar shadow-[0_16px_32px_rgba(15,23,42,0.08)]"
+          className="flex h-full w-full flex-col rounded-xl border border-sidebar-border/80 bg-sidebar shadow-sm"
           >
             {children}
           </div>
         </div>
+        <SidebarRail />
       </div>
     )
   }

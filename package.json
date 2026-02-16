@@ -15,8 +15,7 @@
     "pm2:logs": "pm2 logs",
     "start": "next start",
     "lint": "eslint src eslint.config.mjs next.config.ts tailwind.config.ts --ext .ts,.tsx,.mjs",
-    "typecheck": "tsc --noEmit"
-    ,
+    "typecheck": "tsc --noEmit",
     "clear-db": "node ./scripts/clear-db.js"
   },
   "dependencies": {
@@ -45,6 +44,7 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@tanstack/react-table": "^8.19.2",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
@@ -52,6 +52,7 @@
     "embla-carousel-react": "^8.6.0",
     "firebase": "^11.9.1",
     "genkit": "^1.20.0",
+    "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.1.0",
     "lucide-react": "^0.475.0",
     "next": "15.5.9",

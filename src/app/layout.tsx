@@ -5,7 +5,7 @@ import BackendSync from '@/components/backend-sync';
 import SyncFab from '@/components/sync-fab';
 
 export const metadata: Metadata = {
-  title: 'São José Cordas',
+  title: 'Inventário Ágil',
   description: 'Gerencie eficientemente sua cadeia de suprimentos, do pedido a entrega.',
 };
 
@@ -41,9 +41,13 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="font-body antialiased">
-        <div style={{position: 'fixed', left: 8, top: 8, zIndex: 60, background: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: 6, fontSize: 12}}>SYNC TEST</div>
-        {children}
+      <body className="font-body antialiased bg-background text-foreground">
+        <div className="relative min-h-screen bg-background text-foreground">
+          <div className="fixed left-4 top-4 z-50 rounded-2xl border border-border bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground shadow-sm">
+            SYNC TEST
+          </div>
+          {children}
+        </div>
         <BackendSync />
         <SyncFab />
         <Toaster />

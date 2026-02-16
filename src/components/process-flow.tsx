@@ -75,7 +75,7 @@ export const ProcessFlow: React.FC<Props> = ({
         </div>
 
           <div className="rounded-lg border border-border/70 bg-muted/10 p-4">
-          <div className={`h-3 w-full overflow-hidden rounded bg-slate-200 flow-${id}`}>
+          <div className={`h-3 w-full overflow-hidden rounded bg-muted/30 flow-${id}`}>
             <style
               dangerouslySetInnerHTML={{
                 __html: `

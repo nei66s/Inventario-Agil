@@ -8,30 +8,55 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usePilotStore } from '@/lib/pilot/store';
-import { Role } from '@/lib/pilot/types';
-import { roleLabel } from '@/lib/pilot/i18n';
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const setCurrentRole = usePilotStore((state) => state.setCurrentRole);
+  const setCurrentUser = usePilotStore((state) => state.setCurrentUser);
 
-  const [email, setEmail] = useState('demo@supplyflow.local');
+  const [email, setEmail] = useState('seller@supplyflow.local');
   const [password, setPassword] = useState('demo');
-  const [role, setRole] = useState<Role>('Seller');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
 
-    setCurrentRole(role);
-    toast({
-      title: 'Sessao de demonstracao iniciada',
-      description: `Perfil ativo: ${roleLabel(role)}.`,
-    });
-    router.push('/dashboard');
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        toast({
+          title: 'Falha ao entrar',
+          description: result.message ?? 'Credenciais invalidas',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setCurrentUser(result.user.id);
+      toast({
+        title: 'Sessao iniciada',
+        description: `Perfil ativo: ${result.user.name} (${result.user.role}).`,
+      });
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('login error', error);
+      toast({
+        title: 'Erro inesperado',
+        description: 'Nao foi possivel entrar no momento',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -53,23 +78,9 @@ export default function LoginPage() {
                 <Label htmlFor="password">Senha</Label>
                 <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
-              <div className="grid gap-3 border-t border-border/70 pt-4">
-                <Label>Perfil para simular</Label>
-                <Select value={role} onValueChange={(value) => setRole(value as Role)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Admin">{roleLabel('Admin')}</SelectItem>
-                    <SelectItem value="Manager">{roleLabel('Manager')}</SelectItem>
-                    <SelectItem value="Seller">{roleLabel('Seller')}</SelectItem>
-                    <SelectItem value="Input Operator">{roleLabel('Input Operator')}</SelectItem>
-                    <SelectItem value="Production Operator">{roleLabel('Production Operator')}</SelectItem>
-                    <SelectItem value="Picker">{roleLabel('Picker')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="w-full">Entrar</Button>
+              <Button type="submit" className="w-full" disabled={loading}>
+                Entrar
+              </Button>
             </form>
           </CardContent>
         </Card>

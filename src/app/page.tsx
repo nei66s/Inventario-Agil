@@ -35,43 +35,63 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center justify-start bg-background px-4 py-12">
+    <div className="relative min-h-screen bg-background text-foreground">
       <main className="w-full">
-        <section className="hero mx-auto mb-8">
-          <div className="hero-inner">
-            <div className="max-w-2xl">
-              <h1 className="hero-title">Inventário Ágil para Cadeia de Suprimentos</h1>
-              <p className="hero-subtitle">Gerencie pedidos, produção e picking com visibilidade em tempo real e fluxos de trabalho otimizados.</p>
-              <div className="hero-ctas">
-                <Button onClick={() => router.push('/dashboard')}>Abrir Painel</Button>
-                <Button onClick={() => router.push('/materials')} className="bg-white text-primary">Explorar materiais</Button>
+        <section className="mx-auto mb-8 max-w-7xl">
+          <div className="grid gap-12 lg:grid-cols-[1.6fr,1fr] lg:items-center rounded-[32px] border border-border bg-background p-8 shadow-sm">
+            <div className="space-y-6">
+              <p className="text-xs uppercase tracking-[0.4em] text-muted-foreground">Control Tower · Inventario Agil</p>
+              <h1 className="text-4xl font-semibold leading-tight text-foreground md:text-5xl">
+                Inventario Agil para Cadeia de Suprimentos
+              </h1>
+              <p className="text-lg text-muted-foreground/90">
+                Gerencie pedidos, producao e picking com visibilidade em tempo real e fluxos de trabalho otimizados.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={() => router.push('/dashboard')} className="rounded-full px-6 py-3 text-base font-semibold">
+                  Abrir Painel
+                </Button>
+                <Button
+                  onClick={() => router.push('/materials')}
+                  variant="outline"
+                  className="rounded-full px-6 py-3 text-base font-semibold"
+                >
+                  Explorar materiais
+                </Button>
               </div>
             </div>
-            <div className="hidden md:block">
-              <Logo className="w-40 h-40" />
+            <div className="hidden md:flex items-center justify-center">
+              <Logo className="w-32 h-32 text-primary" />
             </div>
           </div>
         </section>
 
+
         <div className="w-full max-w-md mx-auto">
-          <Card className="mx-auto max-w-sm">
+          <Card className="mx-auto max-w-sm border border-border bg-card text-card-foreground shadow-sm">
             <CardHeader className="text-center">
               <Logo className="mx-auto mb-4" />
-              <CardTitle className="font-headline text-3xl">Inventário Ágil</CardTitle>
-              <CardDescription>Acesso corporativo para simulacao de fluxos da cadeia de suprimentos.</CardDescription>
+              <CardTitle className="font-headline text-3xl">Inventario Agil</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Acesso corporativo para simulacao de fluxos da cadeia de suprimentos.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleLogin} className="grid gap-5">
                 <div className="grid gap-3">
-                  <Label htmlFor="email">E-mail</Label>
+                  <Label htmlFor="email" className="text-muted-foreground">
+                    E-mail
+                  </Label>
                   <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
                 <div className="grid gap-3">
-                  <Label htmlFor="password">Senha</Label>
+                  <Label htmlFor="password" className="text-muted-foreground">
+                    Senha
+                  </Label>
                   <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
                 </div>
                 <div className="grid gap-3 border-t border-border/70 pt-4">
-                  <Label>Perfil para simular</Label>
+                  <Label className="text-muted-foreground">Perfil para simular</Label>
                   <Select value={role} onValueChange={(value) => setRole(value as Role)}>
                     <SelectTrigger>
                       <SelectValue />

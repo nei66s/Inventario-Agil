@@ -1,89 +1,299 @@
 'use client';
 
-import { DatabaseZap, RotateCcw, Shield } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { usePilotStore } from '@/lib/pilot/store';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { useAuthUser } from '@/hooks/use-auth';
+import { Role } from '@/lib/pilot/types';
 import { roleLabel } from '@/lib/pilot/i18n';
 
+type AccountForm = {
+  name: string;
+  email: string;
+  role: Role;
+  password: string;
+};
+
+type AccountRecord = { id: string; name: string; email: string; role: string };
+type ApiUsersList = { users: AccountRecord[]; message?: string };
+type ApiUserCreationResponse = { user: AccountRecord; message?: string };
+type ApiUserUpdateResponse = { user: AccountRecord; message?: string };
+
+const roleOptions: Role[] = ['Admin', 'Manager', 'Seller', 'Input Operator', 'Production Operator', 'Picker'];
+
 export default function AdminPage() {
-  const db = usePilotStore((state) => state.db);
-  const resetDemoData = usePilotStore((state) => state.resetDemoData);
+  const { user: authUser, loading: authLoading } = useAuthUser();
+  const { toast } = useToast();
+  const [users, setUsers] = useState<AccountRecord[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [form, setForm] = useState<AccountForm>({
+    name: '',
+    email: '',
+    role: 'Seller',
+    password: '',
+  });
+  const [creating, setCreating] = useState(false);
+  const [roleSelection, setRoleSelection] = useState<Record<string, Role>>({});
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    if (!authUser || authUser.role !== 'Admin') return;
+    setLoadingUsers(true);
+    try {
+      const response = await fetch('/api/users', { cache: 'no-store' });
+      const result = (await response.json()) as ApiUsersList;
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Nao foi possivel listar usuarios');
+      }
+      setUsers(result.users ?? []);
+      setRoleSelection(
+        Object.fromEntries((result.users ?? []).map((user) => [user.id, user.role as Role]))
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Tente novamente em breve.';
+      toast({
+        title: 'Erro ao buscar usuarios',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, [authUser, toast]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const handleCreate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!authUser) return;
+    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
+      toast({
+        title: 'Campos obrigatorios',
+        description: 'Nome, e-mail e senha sao obrigatorios.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const result = (await response.json()) as ApiUserCreationResponse;
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Nao foi possivel criar usuario');
+      }
+      setUsers((prev) => [...prev, result.user]);
+      setRoleSelection((prev) => ({ ...prev, [result.user.id]: result.user.role as Role }));
+      setForm({ name: '', email: '', role: 'Seller', password: '' });
+      toast({
+        title: 'Conta criada',
+        description: `Usuario ${result.user.email} cadastrado com role ${roleLabel(result.user.role)}.`,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Verifique os dados e tente novamente.';
+      toast({
+        title: 'Erro ao criar conta',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRoleUpdate = async (userId: string) => {
+    if (!authUser) return;
+    const nextRole = roleSelection[userId];
+    if (!nextRole) return;
+    setUpdatingId(userId);
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: nextRole }),
+      });
+      const result = (await response.json()) as ApiUserUpdateResponse;
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Nao foi possivel atualizar role');
+      }
+      setUsers((prev) =>
+        prev.map((user) => (user.id === userId ? { ...user, role: result.user.role } : user))
+      );
+      toast({
+        title: 'Role atualizado',
+        description: `Perfil ${result.user.name} agora e ${roleLabel(result.user.role)}.`,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Tente novamente em breve.';
+      toast({
+        title: 'Erro ao alterar role',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => a.email.localeCompare(b.email));
+  }, [users]);
+
+  if (authLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Perfis</CardTitle>
+          <CardDescription>Validando permissao...</CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (!authUser || authUser.role !== 'Admin') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Administracao</CardTitle>
+          <CardDescription>
+            Apenas o usuario com role Admin pode ver esta pagina. Entre com a conta apropriada.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline flex items-center gap-2"><DatabaseZap className="h-5 w-5" /> Piloto somente frontend</CardTitle>
-          <CardDescription>
-            Backend real (Firebase/Firestore/Functions) esta simulado. O app usa repositorios locais para representar as regras do blueprint.
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2 font-headline">
+            <Shield className="h-5 w-5" /> Administracao de contas
+          </CardTitle>
+          <CardDescription>Crie contas, redefina senhas e atribua roles.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Button variant="outline" onClick={resetDemoData}><RotateCcw className="mr-2 h-4 w-4" />Resetar dados de demo</Button>
+          <form className="grid gap-4 lg:grid-cols-2" onSubmit={handleCreate}>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-name">Nome</Label>
+              <Input
+                id="admin-name"
+                value={form.name}
+                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-email">E-mail</Label>
+              <Input
+                id="admin-email"
+                type="email"
+                value={form.email}
+                onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-password">Senha</Label>
+              <Input
+                id="admin-password"
+                type="password"
+                value={form.password}
+                onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="admin-role">Role</Label>
+              <Select
+                value={form.role}
+                onValueChange={(value) => setForm((prev) => ({ ...prev, role: value as Role }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {roleOptions.map((roleOption) => (
+                    <SelectItem key={roleOption} value={roleOption}>
+                      {roleLabel(roleOption)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="lg:col-span-2">
+              <Button type="submit" disabled={creating}>
+                Criar conta
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline flex items-center gap-2"><Shield className="h-5 w-5" /> Perfis</CardTitle>
-            <CardDescription>Perfis predefinidos para simular RBAC no piloto.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Perfil</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {db.users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell><Badge variant="outline">{roleLabel(user.role)}</Badge></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline">Unidades de medida e conversoes</CardTitle>
-            <CardDescription>Dados obrigatorios iniciais com conversoes opcionais.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="mb-2 text-sm font-semibold">Unidades</p>
-              <div className="flex flex-wrap gap-2">
-                {db.uoms.map((uom) => (
-                  <Badge key={uom.id} variant="secondary">{uom.code}</Badge>
-                ))}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Usuarios cadastrados</CardTitle>
+          <CardDescription>Altere roles rapidamente ou redefina senhas via API.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {loadingUsers && <p className="text-sm text-muted-foreground">Carregando usuarios...</p>}
+          {!loadingUsers && sortedUsers.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum usuario encontrado.</p>
+          )}
+          <div className="space-y-2">
+            {sortedUsers.map((account) => (
+              <div
+                key={account.id}
+                className="flex flex-wrap items-center gap-3 rounded-md border border-border/70 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{account.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{account.email}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={roleSelection[account.id] ?? (account.role as Role)}
+                    onValueChange={(value) =>
+                      setRoleSelection((prev) => ({ ...prev, [account.id]: value as Role }))
+                    }
+                    disabled={account.id === authUser.id}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((roleOption) => (
+                        <SelectItem key={roleOption} value={roleOption}>
+                          {roleLabel(roleOption)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    onClick={() => handleRoleUpdate(account.id)}
+                    disabled={account.id === authUser.id || updatingId === account.id}
+                  >
+                    Salvar role
+                  </Button>
+                </div>
+                <Badge variant="outline">{account.role}</Badge>
               </div>
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-semibold">Conversoes opcionais</p>
-              {db.uomConversions.map((conv) => (
-                <p key={conv.id} className="text-sm text-muted-foreground">{conv.fromUom} {'->'} {conv.toUom} (x{conv.factor})</p>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
