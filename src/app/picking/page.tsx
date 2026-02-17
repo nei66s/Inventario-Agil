@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { generateLabelPdf } from '@/lib/pilot/labels';
+import { LabelFormat } from '@/lib/pilot/types';
 import { readinessLabel, readinessTabLabel } from '@/lib/pilot/i18n';
 import { usePilotStore } from '@/lib/pilot/store';
 import { formatDate } from '@/lib/utils';
@@ -30,24 +32,33 @@ export default function PickingPage() {
 
   const [filter, setFilter] = React.useState<'READY_FULL' | 'READY_PARTIAL' | 'ALL'>('ALL');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
+  const [hydrated, setHydrated] = React.useState(false);
 
   const queue = db.orders
     .filter((order) => ['EM_PICKING', 'ABERTO', 'SAIDA_CONCLUIDA'].includes(order.status))
     .filter((order) => (filter === 'ALL' ? true : order.readiness === filter));
 
-  const selected = queue.find((order) => order.id === selectedOrderId) ?? queue[0] ?? null;
+  const displayQueue = hydrated ? queue : [];
+  const selected = hydrated ? (displayQueue.find((order) => order.id === selectedOrderId) ?? displayQueue[0] ?? null) : null;
 
   React.useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (!hydrated) return;
     if (!selectedOrderId && queue[0]) {
       setSelectedOrderId(queue[0].id);
     }
-  }, [queue, selectedOrderId]);
+  }, [queue, selectedOrderId, hydrated]);
+
+  const [labelFormat, setLabelFormat] = React.useState<LabelFormat>('EXIT_10x15');
 
   const handlePrintLabels = async () => {
     if (!selected) return;
     const pickerName = db.users.find((item) => item.id === selected.pickerId)?.name;
-    await generateLabelPdf(selected, pickerName);
-    registerLabelPrint(selected.id);
+    await generateLabelPdf(selected, pickerName, labelFormat);
+    registerLabelPrint(selected.id, labelFormat);
   };
 
   return (
@@ -65,10 +76,12 @@ export default function PickingPage() {
           </Tabs>
         </CardHeader>
         <CardContent className="space-y-2">
-          {queue.length === 0 ? (
+          {!hydrated ? (
+            <EmptyState icon={PackageCheck} title="Carregando fila..." description="Aguarde enquanto os dados são sincronizados." className="min-h-[120px]" />
+          ) : displayQueue.length === 0 ? (
             <EmptyState icon={PackageCheck} title="Fila sem pedidos" description="Nao ha pedidos prontos para picking no momento." className="min-h-[120px]" />
           ) : (
-            queue.map((order) => (
+            displayQueue.map((order) => (
               <button
                 key={order.id}
                 onClick={() => setSelectedOrderId(order.id)}
@@ -99,8 +112,20 @@ export default function PickingPage() {
                     {selected.clientName} - entrega em {formatDate(selected.dueDate)}
                   </CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={handlePrintLabels}><FileText className="mr-2 h-4 w-4" />Imprimir etiquetas</Button>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={labelFormat} onValueChange={(value) => setLabelFormat(value as LabelFormat)}>
+                    <SelectTrigger className="min-w-[160px]">
+                      <SelectValue placeholder="Formato da etiqueta" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EXIT_10x15">Saída (10x15)</SelectItem>
+                      <SelectItem value="PRODUCTION_4x4">Produção (4x4)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={handlePrintLabels}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    {labelFormat === 'EXIT_10x15' ? 'Imprimir etiqueta 10x15' : 'Imprimir etiqueta 4x4'}
+                  </Button>
                   <Button onClick={() => concludePicking(selected.id)}>Concluir picking</Button>
                 </div>
               </div>

@@ -4,7 +4,7 @@ import pool from '@/lib/db'
 export async function GET() {
   try {
     const res = await pool.query(
-      `SELECT id, sku, name, description, unit, min_stock, reorder_point, setup_time_minutes, production_time_per_unit_minutes, color_options
+      `SELECT id, sku, name, description, unit, min_stock, reorder_point, setup_time_minutes, production_time_per_unit_minutes, color_options, metadata
        FROM materials ORDER BY id`
     )
     const rows = res.rows || []
@@ -19,6 +19,7 @@ export async function GET() {
       setupTimeMinutes: Number(r.setup_time_minutes ?? 0),
       productionTimePerUnitMinutes: Number(r.production_time_per_unit_minutes ?? 0),
       colorOptions: Array.isArray(r.color_options) ? r.color_options : (r.color_options ? JSON.parse(r.color_options) : []),
+      metadata: (typeof r.metadata === 'string' ? JSON.parse(r.metadata) : r.metadata) || {},
     }))
 
     return NextResponse.json(materials)

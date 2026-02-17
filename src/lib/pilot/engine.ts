@@ -1,6 +1,7 @@
 import {
   AuditEvent,
   InventoryReceipt,
+  LabelFormat,
   Notification,
   Order,
   OrderItem,
@@ -608,17 +609,22 @@ export function applyMrpSuggestion(state: PilotDb, suggestionId: string): void {
   suggestion.appliedAt = toIso();
 }
 
-export function registerLabelPrint(state: PilotDb, orderId: string, actorName: string): void {
+export function registerLabelPrint(state: PilotDb, orderId: string, actorName: string, format: LabelFormat): void {
   const order = state.orders.find((item) => item.id === orderId);
   if (!order) return;
+  const previousPrints = order.labelPrintCount;
   order.labelPrintCount += 1;
-  const isReprint = order.labelPrintCount > 1;
-  addAudit(
-    order,
-    isReprint ? 'LABEL_REPRINTED' : 'LABEL_PRINTED',
-    actorName,
-    `${order.volumeCount} etiqueta(s) ${isReprint ? 'reimpressas' : 'impressas'}.`
-  );
+  const isProduction = format === 'PRODUCTION_4x4';
+  const action =
+    isProduction
+      ? previousPrints > 0
+        ? 'LABEL_REPRINTED_PRODUCTION'
+        : 'LABEL_PRINTED_PRODUCTION'
+      : previousPrints > 0
+        ? 'LABEL_REPRINTED_EXIT'
+        : 'LABEL_PRINTED_EXIT';
+  const friendlyFormat = isProduction ? 'produção 4x4' : 'saída 10x15';
+  addAudit(order, action, actorName, `Etiqueta ${friendlyFormat} ${previousPrints > 0 ? 'reimpressa' : 'impressa'}.`);
 }
 
 export function createMrpSuggestion(

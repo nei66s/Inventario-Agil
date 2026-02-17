@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ClipboardList, PackageSearch, PlusCircle, Save, Trash2 } from 'lucide-react';
+import { ClipboardList, PackageSearch, PlusCircle, Save, Trash2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,9 +23,23 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { usePilotStore } from '@/lib/pilot/store';
+import { useToast } from '@/hooks/use-toast';
 import { formatDate } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
 import { readinessLabel } from '@/lib/pilot/i18n';
+
+type ConditionCategory = {
+  id: number;
+  name: string;
+  values: Array<{ id: number; value: string }>;
+};
+
+type ConditionPickerTarget = {
+  orderId: string;
+  itemId: string;
+};
+
+const defaultConditionCategories = ['Fibra', 'FibraCor', 'Corda', 'CordaCor', 'Trico', 'TricoCor', 'Fio', 'Fiocor'];
 
 export default function OrdersPage() {
   const db = usePilotStore((state) => state.db);
@@ -51,6 +65,46 @@ export default function OrdersPage() {
   // default to show all orders ("Todos") instead of "Meus pedidos"
   const [subView, setSubView] = React.useState<'mine' | 'all'>('all');
   const [mounted, setMounted] = React.useState(false);
+  const { toast } = useToast();
+  const [preconditionCategories, setPreconditionCategories] = React.useState<ConditionCategory[]>([]);
+  const [conditionsLoading, setConditionsLoading] = React.useState(false);
+  const [conditionPickerTarget, setConditionPickerTarget] = React.useState<ConditionPickerTarget | null>(null);
+  const [conditionPickerSelection, setConditionPickerSelection] = React.useState<{
+    categoryId: number | null;
+    valueId: number | null;
+  }>({ categoryId: null, valueId: null });
+  const fallbackConditionCategories = React.useMemo(() => {
+    const aggregated: Record<string, Set<string>> = {};
+    defaultConditionCategories.forEach((key) => {
+      aggregated[key] = new Set<string>();
+    });
+
+    db.materials.forEach((material: any) => {
+      const metadata = material.metadata ?? {};
+      defaultConditionCategories.forEach((key) => {
+        const raw = metadata[key] ?? metadata[key.toLowerCase()];
+        if (Array.isArray(raw)) {
+          raw.forEach((value) => {
+            if (value) aggregated[key].add(value);
+          });
+        } else if (typeof raw === 'string' && raw) {
+          aggregated[key].add(raw);
+        }
+      });
+    });
+
+    let generatedId = 1;
+    return defaultConditionCategories
+      .map((key, index) => {
+        const values = Array.from(aggregated[key] ?? []).map((value) => ({
+          id: generatedId++,
+          value,
+        }));
+        if (values.length === 0) return null;
+        return { id: -(index + 1), name: key, values };
+      })
+      .filter(Boolean) as ConditionCategory[];
+  }, [db.materials]);
 
   // Read URL search params only on the client after mount to avoid
   // Next.js prerender/runtime errors related to `useSearchParams()`.
@@ -93,6 +147,50 @@ export default function OrdersPage() {
     return () => { mounted = false };
   }, [setMaterials, setOrders, syncWithBackend]);
 
+  const fetchConditionCategories = React.useCallback(async () => {
+    setConditionsLoading(true);
+    try {
+      const response = await fetch('/api/preconditions');
+      if (!response.ok) throw new Error('Falha ao carregar pre-condicoes');
+      const data = await response.json();
+      if (Array.isArray(data)) setPreconditionCategories(data);
+      else setPreconditionCategories([]);
+    } catch (error) {
+      console.error('Failed to load preconditions', error);
+      setPreconditionCategories([]);
+      toast({ title: 'Erro', description: 'Nao foi possivel carregar as pre-condicoes', variant: 'destructive' });
+    } finally {
+      setConditionsLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => {
+    fetchConditionCategories();
+  }, [fetchConditionCategories]);
+
+  React.useEffect(() => {
+    if (!conditionsLoading && preconditionCategories.length === 0 && fallbackConditionCategories.length > 0) {
+      setPreconditionCategories(fallbackConditionCategories);
+    }
+  }, [conditionsLoading, fallbackConditionCategories, preconditionCategories.length]);
+
+  React.useEffect(() => {
+    if (!conditionPickerTarget) return;
+    const defaultCategory = preconditionCategories[0];
+    setConditionPickerSelection({
+      categoryId: defaultCategory?.id ?? null,
+      valueId: defaultCategory?.values[0]?.id ?? null,
+    });
+  }, [conditionPickerTarget, preconditionCategories]);
+
+  const handleSelectPrecondition = React.useCallback(
+    (orderId: string, itemId: string, categoryName: string, value: string) => {
+      addItemCondition(orderId, itemId, { key: categoryName, value });
+      setConditionPickerTarget(null);
+    },
+    [addItemCondition]
+  );
+
   const filteredOrders = React.useMemo(() => {
     return db.orders.filter((order) => {
       if (order.trashedAt) return false;
@@ -114,6 +212,16 @@ export default function OrdersPage() {
   }, [filteredOrders]);
 
   const selectedOrder = db.orders.find((item) => item.id === selectedOrderId) ?? null;
+
+  React.useEffect(() => {
+    if (!selectedOrder) {
+      if (conditionPickerTarget) setConditionPickerTarget(null);
+      return;
+    }
+    if (conditionPickerTarget && conditionPickerTarget.orderId !== selectedOrder.id) {
+      setConditionPickerTarget(null);
+    }
+  }, [selectedOrder?.id, conditionPickerTarget]);
 
   const stockByMaterial = React.useMemo(() => {
     const map = new Map<string, { onHand: number; reservedTotal: number; available: number }>();
@@ -370,6 +478,8 @@ export default function OrdersPage() {
                         const currentOrderReservedForMaterial = reservations.reduce((acc, reservation) => acc + reservation.qty, 0);
                         const reservedByOtherOrders = Math.max(0, stock.reservedTotal - currentOrderReservedForMaterial);
                         const availableForThisOrder = Math.max(0, stock.onHand - reservedByOtherOrders);
+                        const isPickerOpen =
+                          conditionPickerTarget?.orderId === selectedOrder.id && conditionPickerTarget?.itemId === item.id;
 
                         return (
                           <React.Fragment key={item.id}>
@@ -458,11 +568,135 @@ export default function OrdersPage() {
                                     ) : (
                                       <p className="text-muted-foreground">Sem condicoes adicionadas.</p>
                                     )}
-                                    <div className="flex gap-2">
-                                      <Button type="button" variant="outline" onClick={() => addItemCondition(selectedOrder.id, item.id)}>
-                                        <PlusCircle className="mr-2 h-4 w-4" />Adicionar condicao
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() =>
+                                          setConditionPickerTarget({ orderId: selectedOrder.id, itemId: item.id })
+                                        }
+                                      >
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Adicionar condição
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => addItemCondition(selectedOrder.id, item.id)}
+                                      >
+                                        Condição livre
                                       </Button>
                                     </div>
+                                    {isPickerOpen && (
+                                      <div className="mt-2 rounded-xl border border-border/70 bg-background p-3 text-sm shadow-inner">
+                                        <div className="mb-2 flex items-center justify-between">
+                                          <p className="text-xs font-semibold uppercase tracking-[0.4em] text-muted-foreground">
+                                            Pré-condições
+                                          </p>
+                                          <Button variant="ghost" size="icon" onClick={() => setConditionPickerTarget(null)}>
+                                            <X className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </div>
+                                        {conditionsLoading ? (
+                                          <p className="text-xs text-muted-foreground">Carregando categorias...</p>
+                                        ) : preconditionCategories.length === 0 ? (
+                                          <p className="text-xs text-muted-foreground">Sem pré-condições cadastradas.</p>
+                                        ) : (
+                                          <div className="space-y-3">
+                                            <div className="grid gap-2">
+                                              <Label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                                                Categoria
+                                              </Label>
+                                              <Select
+                                                value={
+                                                  conditionPickerSelection.categoryId !== null
+                                                    ? String(conditionPickerSelection.categoryId)
+                                                    : ''
+                                                }
+                                                onValueChange={(value) => {
+                                                  const parsed = Number(value);
+                                                  const nextCategory = preconditionCategories.find(
+                                                    (category) => category.id === parsed
+                                                  );
+                                                  setConditionPickerSelection({
+                                                    categoryId: Number.isNaN(parsed) ? null : parsed,
+                                                    valueId: nextCategory?.values[0]?.id ?? null,
+                                                  });
+                                                }}
+                                              >
+                                                <SelectTrigger className="w-full">
+                                                  <SelectValue placeholder="Selecionar categoria" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {preconditionCategories.map((category) => (
+                                                    <SelectItem key={category.id} value={String(category.id)}>
+                                                      {category.name}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                            <div className="grid gap-2">
+                                              <Label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                                                Valor
+                                              </Label>
+                                              <Select
+                                                value={
+                                                  conditionPickerSelection.valueId !== null
+                                                    ? String(conditionPickerSelection.valueId)
+                                                    : ''
+                                                }
+                                                onValueChange={(value) => {
+                                                  const parsed = Number(value);
+                                                  setConditionPickerSelection((prev) => ({
+                                                    ...prev,
+                                                    valueId: Number.isNaN(parsed) ? null : parsed,
+                                                  }));
+                                                }}
+                                              >
+                                                <SelectTrigger className="w-full">
+                                                  <SelectValue placeholder="Selecionar valor" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {preconditionCategories
+                                                    .find((category) => category.id === conditionPickerSelection.categoryId)
+                                                    ?.values.map((value) => (
+                                                      <SelectItem key={value.id} value={String(value.id)}>
+                                                        {value.value}
+                                                      </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => {
+                                                const category = preconditionCategories.find(
+                                                  (cat) => cat.id === conditionPickerSelection.categoryId
+                                                );
+                                                const value = category?.values.find(
+                                                  (val) => val.id === conditionPickerSelection.valueId
+                                                );
+                                                if (!category || !value) return;
+                                                handleSelectPrecondition(
+                                                  selectedOrder.id,
+                                                  item.id,
+                                                  category.name,
+                                                  value.value
+                                                );
+                                              }}
+                                              disabled={
+                                                !conditionPickerSelection.categoryId || !conditionPickerSelection.valueId
+                                              }
+                                            >
+                                              Aplicar condição
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="rounded-xl border border-border/70 bg-background p-3 text-sm">
                                     <p className="mb-2 font-medium">Reservas ativas</p>

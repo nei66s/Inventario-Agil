@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { buildSeedData, defaultCurrentUserRole } from './seed';
 import { LocalPilotRepository } from './local-repository';
-import { PilotDb, Role, Material } from './types';
+import { LabelFormat, PilotDb, Role, Material } from './types';
 import {
   addItemToOrder,
   applyMrpSuggestion,
@@ -52,6 +52,7 @@ type PilotState = {
   syncWithBackend: () => Promise<void>;
   setOrders: (orders: PilotDb['orders']) => void;
   setMaterials: (materials: PilotDb['materials']) => void;
+  setProductionTasks: (tasks: PilotDb['productionTasks']) => void;
   setCurrentRole: (role: Role) => void;
   setCurrentUser: (userId: string) => void;
   updateCurrentUserProfile: (payload: { name?: string; email?: string; avatarUrl?: string }) => void;
@@ -75,7 +76,7 @@ type PilotState = {
     }
   ) => void;
   updateOrderClientName: (orderId: string, clientName: string) => void;
-  addItemCondition: (orderId: string, itemId: string) => void;
+  addItemCondition: (orderId: string, itemId: string, payload?: { key?: string; value?: string }) => void;
   updateItemConditionField: (
     orderId: string,
     itemId: string,
@@ -93,7 +94,7 @@ type PilotState = {
   markNotification: (notificationId: string, read: boolean) => void;
   updateSeparatedQty: (orderId: string, itemId: string, qty: number) => void;
   concludePicking: (orderId: string) => void;
-  registerLabelPrint: (orderId: string) => void;
+  registerLabelPrint: (orderId: string, format: LabelFormat) => void;
   createSuggestion: (
     materialId: string,
     suggestedReorderPoint: number,
@@ -113,6 +114,9 @@ type PilotState = {
     colorOptions: string[];
   }) => void;
   updateMaterial: (materialId: string, payload: Partial<Material>) => void;
+  syncOrdersFromBackend: () => Promise<void>;
+  syncProductionTasksFromBackend: () => Promise<void>;
+  syncDashboardData: () => Promise<void>;
 };
 
 function persist(db: PilotDb) {
@@ -183,6 +187,13 @@ export const usePilotStore = create<PilotState>((set, get) => ({
   setMaterials: (materials) => {
     const db = structuredClone(get().db);
     db.materials = materials;
+    initializeState(db);
+    repository.save(db);
+    set({ db });
+  },
+  setProductionTasks: (tasks) => {
+    const db = structuredClone(get().db);
+    db.productionTasks = tasks;
     initializeState(db);
     repository.save(db);
     set({ db });
@@ -276,13 +287,16 @@ export const usePilotStore = create<PilotState>((set, get) => ({
     persist(db);
     set({ db });
   },
-  addItemCondition: (orderId, itemId) => {
+  addItemCondition: (orderId, itemId, payload) => {
     const db = structuredClone(get().db);
     const order = db.orders.find((o) => o.id === orderId);
     const row = order?.items.find((it) => it.id === itemId);
     if (!order || !row) return;
     if (!row.conditions) row.conditions = [];
-    row.conditions.push({ key: '', value: '' });
+    row.conditions.push({
+      key: payload?.key ?? '',
+      value: payload?.value ?? '',
+    });
     persist(db);
     set({ db });
   },
@@ -393,11 +407,11 @@ export const usePilotStore = create<PilotState>((set, get) => ({
     persist(db);
     set({ db });
   },
-  registerLabelPrint: (orderId) => {
+  registerLabelPrint: (orderId, format) => {
     const state = get();
     const db = structuredClone(state.db);
     const actor = db.users.find((item) => item.id === state.currentUserId)?.name ?? 'Separador';
-    registerLabelPrint(db, orderId, actor);
+    registerLabelPrint(db, orderId, actor, format);
     persist(db);
     set({ db });
   },
@@ -465,6 +479,37 @@ export const usePilotStore = create<PilotState>((set, get) => ({
     } catch (err) {
       console.error('syncWithBackend failed', err);
     }
+  },
+  syncOrdersFromBackend: async () => {
+    try {
+      const res = await fetch('/api/orders');
+      if (!res.ok) return;
+      const orders = await res.json();
+      if (Array.isArray(orders) && orders.length > 0) {
+        setOrders(orders);
+      }
+    } catch (err) {
+      console.error('syncOrdersFromBackend failed', err);
+    }
+  },
+  syncProductionTasksFromBackend: async () => {
+    try {
+      const res = await fetch('/api/production');
+      if (!res.ok) return;
+      const tasks = await res.json();
+      if (Array.isArray(tasks)) {
+        get().setProductionTasks(tasks);
+      }
+    } catch (err) {
+      console.error('syncProductionTasksFromBackend failed', err);
+    }
+  },
+  syncDashboardData: async () => {
+    await Promise.all([
+      get().syncWithBackend(),
+      get().syncOrdersFromBackend(),
+      get().syncProductionTasksFromBackend(),
+    ]);
   },
 }));
 

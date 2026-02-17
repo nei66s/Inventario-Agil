@@ -56,5 +56,6 @@ npm run build
 
 - Reservas usam TTL de 5 minutos e heartbeat.
 - Job client-side limpa reservas expiradas a cada 30s.
+- Materiais agora são configurados com o catálogo legacy reduzido. Após aplicar as migrations (`node scripts/run-migrations.js`), execute `node scripts/seed-legacy-materials.js` para carregar os quatro materiais principais com as condições predefinidas e `node scripts/seed-operators.js` para criar os operadores de picking (`@gmail.com` / senha `12345`).
 - Etiquetas e QR sao gerados client-side (`jspdf` + `qrcode`).
 - Reimpressao e eventos ficam no `auditTrail` do pedido.

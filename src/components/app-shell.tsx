@@ -7,6 +7,7 @@ import {
   AreaChart,
   Bot,
   Factory,
+  FileText,
   LogOut,
   Moon,
   PackageCheck,
@@ -59,9 +60,9 @@ const navItems = [
   { href: '/materials', icon: Bot, label: 'Materiais' },
   { href: '/inventory', icon: Warehouse, label: 'Estoque' },
   { href: '/production', icon: Factory, label: 'Producao' },
+  { href: '/report', icon: FileText, label: 'Relatório' },
   { href: '/picking', icon: PackageCheck, label: 'Separacao' },
   { href: '/admin', icon: Shield, label: 'Administracao' },
-  { href: '/profile', icon: UserCircle2, label: 'Perfil' },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -86,6 +87,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const displayUser = authUser ?? user;
   const displayRoleLabel = displayUser ? roleLabel(displayUser.role) : roleLabel(currentRole);
+  const headerIsHydrated = mounted;
+  const userName = headerIsHydrated ? displayUser?.name ?? 'Usuario' : 'Usuario';
+  const roleLabelText = headerIsHydrated ? displayRoleLabel : 'Carregando...';
+  const avatarSrc = headerIsHydrated ? displayUser?.avatarUrl ?? '/logo.png' : '/logo.png';
+  const avatarAlt = headerIsHydrated ? displayUser?.name ?? 'Usuario' : 'Usuario';
+  const avatarInitial = headerIsHydrated ? displayUser?.name?.charAt(0)?.toUpperCase() ?? 'U' : 'U';
 
   React.useEffect(() => {
     const timer = window.setInterval(() => {
@@ -130,10 +137,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <SidebarGroupLabel>
                 Painel
                 {mounted ? (
-                  <div className="ml-2 inline-flex items-center gap-2">
-                    <Badge variant="secondary">{db.orders.length}</Badge>
-                    {expiringSoon > 0 ? <Badge variant="warning">{expiringSoon}</Badge> : null}
-                  </div>
+                  expiringSoon > 0 ? (
+                    <div className="ml-2 inline-flex items-center gap-2">
+                      <Badge variant="warning">{expiringSoon}</Badge>
+                    </div>
+                  ) : null
                 ) : null}
               </SidebarGroupLabel>
               <SidebarMenu>
@@ -206,25 +214,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <SidebarGroup>
               <SidebarGroupLabel>Administracao</SidebarGroupLabel>
-              <SidebarMenu>
-                {navItems
-                  .filter(
-                    (i) =>
-                      i.href === '/materials' ||
-                      i.href === '/profile' ||
-                      (i.href === '/admin' && authUser?.role === 'Admin')
-                  )
-                  .map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
-                        <Link href={item.href}>
-                          <item.icon />
-                          <span>{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-              </SidebarMenu>
+            <SidebarMenu>
+              {navItems
+                .filter((i) => i.href === '/materials' || i.href === '/admin')
+                .map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+            </SidebarMenu>
             </SidebarGroup>
           </div>
         </SidebarContent>
@@ -232,12 +235,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarFooter className="rounded-3xl border border-sidebar-border/70 bg-sidebar/90 p-3">
           <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/20 p-3 text-card-foreground">
             <Avatar className="h-10 w-10">
-              <AvatarImage src={displayUser?.avatarUrl ?? '/logo.png'} alt={displayUser?.name} />
-              <AvatarFallback>{displayUser?.name?.charAt(0)?.toUpperCase() ?? 'U'}</AvatarFallback>
+              <AvatarImage src={avatarSrc} alt={avatarAlt} />
+              <AvatarFallback>{avatarInitial}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-foreground">{displayUser?.name}</div>
-              <div className="text-xs text-muted-foreground">{displayRoleLabel}</div>
+              <div className="truncate text-sm font-medium text-foreground">{userName}</div>
+              <div className="text-xs text-muted-foreground">{roleLabelText}</div>
             </div>
             <SidebarTrigger className="ml-auto hidden md:inline-flex" />
           </div>
@@ -276,15 +279,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-10 w-10 rounded-full p-0">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={displayUser?.avatarUrl ?? '/logo.png'} alt={displayUser?.name} />
-                  <AvatarFallback>{displayUser?.name?.charAt(0)?.toUpperCase() ?? 'U'}</AvatarFallback>
+                  <AvatarImage src={avatarSrc} alt={avatarAlt} />
+                  <AvatarFallback>{avatarInitial}</AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-60" side="bottom" align="end">
               <DropdownMenuLabel className="space-y-0.5">
-                <div>{displayUser?.name ?? 'Usuario'}</div>
-                <div className="text-xs font-normal text-muted-foreground">{displayRoleLabel}</div>
+                <div>{userName}</div>
+                <div className="text-xs font-normal text-muted-foreground">{roleLabelText}</div>
               </DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/profile">

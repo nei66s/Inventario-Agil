@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Factory } from 'lucide-react';
+import { Factory, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,8 @@ import {
 import { formatDate } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
 import { productionTaskStatusLabel } from '@/lib/pilot/i18n';
+import { generateLabelPdf } from '@/lib/pilot/labels';
+import { usePilotStore } from '@/lib/pilot/store';
 
 type ProductionTask = {
   id: string;
@@ -37,6 +39,9 @@ export default function ProductionPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = React.useState<string | null>(null);
+  const [busyLabelTaskId, setBusyLabelTaskId] = React.useState<string | null>(null);
+  const orders = usePilotStore((state) => state.db.orders);
+  const registerLabelPrint = usePilotStore((state) => state.registerLabelPrint);
 
   const loadTasks = React.useCallback(async () => {
     setLoading(true);
@@ -72,6 +77,24 @@ export default function ProductionPage() {
       setError(errorMessage(err) || 'Falha ao atualizar tarefa');
     } finally {
       setBusyTaskId(null);
+    }
+  };
+
+  const handlePrintProductionLabel = async (task: ProductionTask) => {
+    const order = orders.find((item) => item.id === task.orderId);
+    if (!order) {
+      setError('Pedido não encontrado para imprimir etiqueta.');
+      return;
+    }
+
+    setBusyLabelTaskId(task.id);
+    try {
+      await generateLabelPdf(order, undefined, 'PRODUCTION_4x4');
+      registerLabelPrint(order.id, 'PRODUCTION_4x4');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Falha ao imprimir etiqueta de produção');
+    } finally {
+      setBusyLabelTaskId(null);
     }
   };
 
@@ -148,6 +171,15 @@ export default function ProductionPage() {
                         onClick={() => mutateTask(task.id, 'complete')}
                       >
                         Concluir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busyLabelTaskId === task.id}
+                        onClick={() => handlePrintProductionLabel(task)}
+                        aria-label="Imprimir etiqueta 4x4"
+                      >
+                        <FileText className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>

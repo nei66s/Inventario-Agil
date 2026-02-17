@@ -29,6 +29,8 @@ export type NotificationType =
   | 'PRODUCAO_PENDENTE'
   | 'SISTEMA';
 
+export type LabelFormat = 'EXIT_10x15' | 'PRODUCTION_4x4';
+
 export type Uom = {
   id: string;
   code: string;
@@ -58,6 +60,7 @@ export type Client = {
 
 export type Material = {
   id: string;
+  sku?: string;
   name: string;
   standardUom: string;
   minStock: number;
@@ -65,6 +68,7 @@ export type Material = {
   setupTimeMinutes: number;
   productionTimePerUnitMinutes: number;
   colorOptions: string[];
+  metadata?: Record<string, string>;
 };
 
 export type StockBalance = {

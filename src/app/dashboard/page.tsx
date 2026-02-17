@@ -8,8 +8,7 @@ import { formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart';
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
+  /* PieChart, Pie - converted to BarChart/Bar */
   Cell,
   Tooltip,
   Legend,
@@ -50,6 +49,7 @@ const colorForKey = (key?: string | number) => {
 export default function DashboardPage() {
   const db = usePilotStore((state) => state.db);
   const { stockView } = usePilotDerived();
+  const syncDashboardData = usePilotStore((state) => state.syncDashboardData);
   const router = useRouter();
 
   const openOrders = db.orders.filter((item) => ['ABERTO', 'EM_PICKING'].includes(item.status)).length;
@@ -208,6 +208,9 @@ export default function DashboardPage() {
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    syncDashboardData();
+  }, [syncDashboardData]);
 
   const [search, setSearch] = useState('');
   const filteredRecentOrders = useMemo(() => {
@@ -542,15 +545,18 @@ export default function DashboardPage() {
               <EmptyState title="Sem dados" description="Nenhum pedido." />
             ) : (
               <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie data={ordersStatusCounts} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label>
+                <BarChart data={ordersStatusCounts} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="value">
                     {ordersStatusCounts.map((_, i) => (
                       <Cell key={`st-${i}`} fill={chartPalette[i % chartPalette.length]} />
                     ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
@@ -586,12 +592,12 @@ export default function DashboardPage() {
           <CardContent>
             <div className="flex items-center justify-center">
               <ResponsiveContainer width={180} height={120}>
-                <PieChart>
-                  <Pie data={[{ name: 'risk', value: gaugeRisk }, { name: 'ok', value: 100 - gaugeRisk }]} dataKey="value" startAngle={180} endAngle={0} innerRadius={40} outerRadius={80} paddingAngle={2}>
-                    <Cell fill="#ef4444" />
-                    <Cell fill="#e5e7eb" />
-                  </Pie>
-                </PieChart>
+                <BarChart layout="vertical" data={[{ name: 'Risco', value: gaugeRisk }]} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <XAxis type="number" domain={[0, 100]} />
+                  <YAxis type="category" dataKey="name" />
+                  <Tooltip formatter={(v: any) => `${v}%`} />
+                  <Bar dataKey="value" fill="#ef4444" />
+                </BarChart>
               </ResponsiveContainer>
             </div>
             <p className="text-center mt-2 font-semibold">{gaugeRisk}% em risco</p>
@@ -614,17 +620,19 @@ export default function DashboardPage() {
               {ordersBySeller.length === 0 ? (
                 <EmptyState icon={ShoppingCart} title="Sem dados" description="Nenhum pedido registrado." />
               ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={ordersBySeller} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label>
-                              {ordersBySeller.map((entry) => (
-                                <Cell key={`seller-${entry.name}`} fill={colorForKey(entry.name)} />
-                              ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart layout="vertical" data={ordersBySeller} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="name" width={120} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="value">
+                        {ordersBySeller.map((entry) => (
+                          <Cell key={`seller-${entry.name}`} fill={colorForKey(entry.name)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
               )}
             </ChartContainer>
           </CardContent>
@@ -641,15 +649,17 @@ export default function DashboardPage() {
                 <EmptyState icon={ShoppingCart} title="Sem dados" description="Nenhuma separacao registrada." />
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={ordersByPicker} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label>
+                  <BarChart layout="vertical" data={ordersByPicker} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" width={120} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value">
                       {ordersByPicker.map((entry) => (
                         <Cell key={`picker-${entry.name}`} fill={colorForKey(entry.name)} />
                       ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </ChartContainer>
@@ -667,15 +677,17 @@ export default function DashboardPage() {
                 <EmptyState icon={Package} title="Sem dados" description="Nenhum registro de entrada." />
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={receiptsByOperator} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={72} label>
+                  <BarChart layout="vertical" data={receiptsByOperator} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+                    <XAxis type="number" />
+                    <YAxis type="category" dataKey="name" width={120} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value">
                       {receiptsByOperator.map((entry) => (
                         <Cell key={`operator-${entry.name}`} fill={colorForKey(entry.name)} />
                       ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
+                    </Bar>
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </ChartContainer>
