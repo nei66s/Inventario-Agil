@@ -11,8 +11,9 @@ import { KpiCard } from '@/components/ui/kpi-card';
 import { formatDate } from '@/lib/utils';
 import { readinessLabel, dashboardLabels } from '@/lib/domain/i18n';
 import { DashboardData } from '@/lib/repository/dashboard';
+import { notifyDataRefreshed } from '@/lib/data-refresh';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ResponsiveContainer,
   Cell,
@@ -25,6 +26,8 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
 } from 'recharts';
 
 type DashboardClientProps = {
@@ -66,36 +69,40 @@ const parseBucketToDate = (label?: string | number) => {
 const isFinalizedStatus = (status?: string | null) => status === 'FINALIZADO' || status === 'SAIDA_CONCLUIDA';
 const isInSeparationStatus = (status?: string | null) => status === 'EM_PICKING';
 
+const createDashboardFingerprint = (snapshot: DashboardData) => JSON.stringify(snapshot);
+
 export default function DashboardClient({ data }: DashboardClientProps) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<'month' | 'all'>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData>(data);
+  const dashboardFingerprintRef = useRef(createDashboardFingerprint(data));
 
   const materialsById = useMemo(
-    () => Object.fromEntries(data.materials.map((material) => [material.id, material])),
-    [data.materials]
+    () => Object.fromEntries(dashboardData.materials.map((material) => [material.id, material])),
+    [dashboardData.materials]
   );
 
   const stockView = useMemo(() => {
-    return data.stockBalances.map((balance) => {
+    return dashboardData.stockBalances.map((balance) => {
       const material = materialsById[balance.materialId];
       const productionReserved = (balance as any).productionReserved ?? 0;
       const available = Math.max(0, balance.onHand - balance.reservedTotal - productionReserved);
-      const activeReservations = data.stockReservations
+      const activeReservations = dashboardData.stockReservations
         .filter((reservation) => reservation.materialId === balance.materialId)
         .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime());
       return { ...balance, material, available, activeReservations };
     });
-  }, [data.stockBalances, data.stockReservations, materialsById]);
+  }, [dashboardData.stockBalances, dashboardData.stockReservations, materialsById]);
 
-  const orders = data.orders;
-  const productionTasks = data.productionTasks;
+  const orders = dashboardData.orders;
+  const productionTasks = dashboardData.productionTasks;
 
   const openOrders = orders.filter((item) => ['ABERTO', 'EM_PICKING'].includes(item.status)).length;
   const tasksPending = productionTasks.filter((item) => item.status !== 'DONE').length;
-  const unread = data.notifications.filter((item) => !item.readAt).length;
+  const unread = dashboardData.notifications.filter((item) => !item.readAt).length;
 
   const lowStock = stockView.filter((item) => item.material && item.available <= item.material.minStock);
   const recentOrders = useMemo(
@@ -112,7 +119,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     ordersBySellerMap[key] = (ordersBySellerMap[key] || 0) + 1;
   });
   const ordersBySeller = Object.entries(ordersBySellerMap).map(([id, value]) => ({
-    name: data.users.find((u) => u.id === id)?.name || id,
+    name: dashboardData.users.find((u) => u.id === id)?.name || id,
     value,
   }));
 
@@ -122,7 +129,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     ordersByPickerMap[order.pickerId] = (ordersByPickerMap[order.pickerId] || 0) + 1;
   });
   const ordersByPicker = Object.entries(ordersByPickerMap).map(([id, value]) => ({
-    name: data.users.find((u) => u.id === id)?.name || id,
+    name: dashboardData.users.find((u) => u.id === id)?.name || id,
     value,
   }));
 
@@ -133,6 +140,32 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [orders]);
+
+  const ordersStatusTotal = useMemo(() => {
+    return ordersStatusCounts.reduce((s, e) => s + e.value, 0) || 0;
+  }, [ordersStatusCounts]);
+
+  const renderStatusLabel = (props: any) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, percent, payload } = props;
+    const RAD = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 1.1;
+    const x = cx + radius * Math.cos(-midAngle * RAD);
+    const y = cy + radius * Math.sin(-midAngle * RAD);
+    const label = `${payload.name} ${Math.round((percent || 0) * 100)}%`;
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#334155"
+        textAnchor={x > cx ? 'start' : 'end'}
+        dominantBaseline="central"
+        fontSize={12}
+      >
+        {label}
+      </text>
+    );
+  };
 
   const agingBuckets = useMemo(() => {
     const buckets = { '0-3': 0, '4-7': 0, '8-14': 0, '15+': 0 } as Record<string, number>;
@@ -148,10 +181,10 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   }, [orders]);
 
   const gaugeRisk = useMemo(() => {
-    const total = data.materials.length || 1;
+    const total = dashboardData.materials.length || 1;
     const low = lowStock.length;
     return Math.round((low / total) * 100);
-  }, [data.materials, lowStock]);
+  }, [dashboardData.materials, lowStock]);
 
   const last14 = useMemo(() => {
     const arr: string[] = [];
@@ -208,18 +241,32 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     }
   }, [filteredOrders, selectedOrderId]);
 
+  const fetchDashboardUpdates = useCallback(async () => {
+    try {
+      const response = await fetch('/api/dashboard', { cache: 'no-store' });
+      if (!response.ok) return;
+      const next = (await response.json()) as DashboardData;
+      const nextFingerprint = createDashboardFingerprint(next);
+      if (nextFingerprint === dashboardFingerprintRef.current) return;
+      dashboardFingerprintRef.current = nextFingerprint;
+      setDashboardData(next);
+      notifyDataRefreshed();
+    } catch {
+      // ignore failures
+    }
+  }, []);
+
   useEffect(() => {
-    const id = window.setInterval(() => {
-      router.refresh();
-    }, 15000);
+    fetchDashboardUpdates();
+    const id = window.setInterval(fetchDashboardUpdates, 15000);
     return () => window.clearInterval(id);
-  }, [router]);
+  }, [fetchDashboardUpdates]);
 
   const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
 
   const stockByMaterial = useMemo(() => {
     const map = new Map<string, { onHand: number; reservedTotal: number; available: number }>();
-    data.stockBalances.forEach((balance) => {
+    dashboardData.stockBalances.forEach((balance) => {
       map.set(balance.materialId, {
         onHand: balance.onHand,
         reservedTotal: balance.reservedTotal,
@@ -227,7 +274,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
       });
     });
     return map;
-  }, [data.stockBalances]);
+  }, [dashboardData.stockBalances]);
 
   const producingSet = useMemo(
     () => new Set(productionTasks.filter((task) => task.status !== 'DONE').map((task) => task.orderId)),
@@ -537,20 +584,65 @@ export default function DashboardClient({ data }: DashboardClientProps) {
             {ordersStatusCounts.length === 0 ? (
               <EmptyState title="Sem dados" description="Nenhum pedido." />
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={ordersStatusCounts} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value">
-                    {ordersStatusCounts.map((_, index) => (
-                      <Cell key={`status-${index}`} fill={chartPalette[index % chartPalette.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="w-full md:w-1/2 flex items-center justify-center">
+                  <ResponsiveContainer width="220" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={ordersStatusCounts}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={64}
+                        outerRadius={96}
+                        paddingAngle={6}
+                        labelLine={false}
+                        label={renderStatusLabel}
+                      >
+                        {ordersStatusCounts.map((_, index) => (
+                          <Cell key={`status-${index}`} fill={chartPalette[index % chartPalette.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number, name: string) => [`${value}`, name]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+
+                  {/* Center stat overlay for small screens */}
+                  <div className="md:hidden absolute pointer-events-none">
+                    <div className="text-center">
+                      <div className="text-lg font-semibold">{ordersStatusTotal}</div>
+                      <div className="text-xs text-muted-foreground">pedidos</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="w-full md:w-1/2">
+                  <div className="space-y-2">
+                    {ordersStatusCounts.map((entry, idx) => {
+                      const percent = ordersStatusTotal ? Math.round((entry.value / ordersStatusTotal) * 100) : 0;
+                      const color = chartPalette[idx % chartPalette.length];
+                      return (
+                        <div key={`legend-${idx}"`} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <span className="inline-block w-3 h-3 rounded-sm" style={{ background: color }} />
+                            <div className="text-sm font-medium text-foreground">{entry.name}</div>
+                          </div>
+                          <div className="w-40 md:w-48">
+                            <div className="h-2 bg-border rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${percent}%`, background: color }}
+                                className="h-2 rounded-full"
+                              />
+                            </div>
+                          </div>
+                          <div className="text-sm font-mono tabular-nums text-foreground w-12 text-right">{entry.value} ({percent}%)</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>

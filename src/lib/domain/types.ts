@@ -27,7 +27,8 @@ export type NotificationType =
   | 'ESTOQUE_PONTO_PEDIDO'
   | 'RUPTURA'
   | 'PRODUCAO_PENDENTE'
-  | 'SISTEMA';
+  | 'SISTEMA'
+  | 'PEDIDO_FLUXO';
 
 export type LabelFormat = 'EXIT_10x15' | 'PRODUCTION_4x4';
 
@@ -97,6 +98,7 @@ export type OrderItem = {
   materialName: string;
   uom: string;
   color: string;
+  description?: string;
   shortageAction?: 'PRODUCE' | 'BUY';
   qtyRequested: number;
   qtyReservedFromStock: number;
@@ -176,6 +178,7 @@ export type Notification = {
   createdAt: string;
   readAt?: string;
   roleTarget?: Role;
+  userTarget?: string;
   orderId?: string;
   materialId?: string;
   dedupeKey?: string;

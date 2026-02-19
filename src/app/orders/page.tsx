@@ -628,13 +628,14 @@ export default function OrdersPage() {
                       <TableHead className="text-right">Disponivel para este pedido</TableHead>
                       <TableHead className="text-right">Qtd. reservada (estoque)</TableHead>
                       <TableHead className="text-right">Qtd. para produzir</TableHead>
+                      <TableHead>Cor</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedOrder.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-20 text-center text-muted-foreground">
+                        <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
                           Adicione itens para iniciar a reserva.
                         </TableCell>
                       </TableRow>
@@ -700,6 +701,15 @@ export default function OrdersPage() {
                               <TableCell className="text-right font-semibold text-amber-600">
                                 {item.qtyToProduce}
                               </TableCell>
+                              <TableCell>
+                                <Input
+                                  placeholder="Cor"
+                                  value={item.color ?? ''}
+                                  onChange={(e) => updateOrderItemField(selectedOrder.id, item.id, { color: e.target.value })}
+                                  onBlur={(e) => persistOrderItemField(selectedOrder.id, item.id, { color: String(e.target.value ?? '') })}
+                                  className="w-24"
+                                />
+                              </TableCell>
                               <TableCell className="text-center">
                                 <Button variant="ghost" onClick={() => removeOrderItem(selectedOrder.id, item.id)}>
                                   <Trash2 className="h-4 w-4" />
@@ -707,7 +717,7 @@ export default function OrdersPage() {
                               </TableCell>
                             </TableRow>
                             <TableRow>
-                              <TableCell colSpan={9} className="bg-muted/30">
+                              <TableCell colSpan={10} className="bg-muted/30">
                                 <div className="grid gap-3 md:grid-cols-2">
                                   <div className="space-y-2">
                                     <Label>Condicao especifica do item</Label>

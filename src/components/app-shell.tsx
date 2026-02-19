@@ -51,6 +51,7 @@ import PingHealth from './ping-health';
 import { Input } from './ui/input';
 import { roleLabel } from '@/lib/domain/i18n';
 import { useAuthUser } from '@/hooks/use-auth';
+import { DataRefreshIndicator } from './data-refresh-indicator';
 
 const navItems = [
   { href: '/dashboard', icon: AreaChart, label: 'Indicadores' },
@@ -239,6 +240,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <PingHealth />
             <DbHealth />
+            <DataRefreshIndicator />
           </div>
           {mounted ? (
             <Button

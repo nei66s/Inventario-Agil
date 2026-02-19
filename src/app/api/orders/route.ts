@@ -20,6 +20,7 @@ type ApiOrder = {
     materialName: string
     uom: string
     color: string
+    description?: string
     shortageAction?: 'PRODUCE' | 'BUY'
     qtyRequested: number
     qtyReservedFromStock: number
@@ -65,6 +66,7 @@ type OrderRow = {
   item_condition: string | null
   condition_template_name: string | null
   conditions: any | null
+  item_description: string | null
 }
 
 const statusMap: Record<string, ApiOrder['status']> = {
@@ -105,8 +107,7 @@ function errorMessage(err: unknown): string {
 export async function GET() {
   try {
     const totalStart = process.hrtime.bigint()
-    const res = await query<OrderRow>(
-      `SELECT
+    const baseQuery = `SELECT
          o.id as order_id,
          o.order_number,
          o.status,
@@ -133,13 +134,18 @@ export async function GET() {
          oi.separated_weight,
          oi.item_condition,
          oi.condition_template_name,
+         oi.item_description,
          m.name as material_name,
          m.unit as material_unit
        FROM orders o
        LEFT JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN materials m ON m.id = oi.material_id
-       ORDER BY o.created_at ASC`
-    )
+       LEFT JOIN materials m ON m.id = oi.material_id`
+
+     const prodFilter = process.env.NODE_ENV === 'production'
+      ? " WHERE (o.status IS NULL OR lower(o.status) NOT IN ('rascunho','draft'))"
+      : ''
+
+     const res = await query<OrderRow>(`${baseQuery}${prodFilter} ORDER BY o.created_at ASC`)
     const rows = res.rows || []
     const queryMs = res.queryTimeMs
 
@@ -195,6 +201,7 @@ export async function GET() {
           materialName: r.material_name || `M-${r.material_id}`,
           uom: r.material_unit || 'EA',
           color: r.color ?? '',
+          description: r.item_description ?? undefined,
           shortageAction: (String(r.shortage_action ?? 'PRODUCE').toUpperCase() === 'BUY' ? 'BUY' : 'PRODUCE'),
           qtyRequested,
           qtyReservedFromStock,

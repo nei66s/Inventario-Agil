@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import pool from '@/lib/db'
+import { notifyProductionTaskCreated } from '@/lib/notifications'
 
 type DbRow = {
   id: number
@@ -12,6 +13,8 @@ type DbRow = {
   order_number: string | null
   material_name: string | null
   order_source: string | null
+  color?: string | null
+  description?: string | null
 }
 
 function toApiTask(row: DbRow) {
@@ -26,6 +29,8 @@ function toApiTask(row: DbRow) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isMrp: String(row.order_source ?? '').toLowerCase() === 'mrp',
+    color: row.color ?? '',
+    description: row.description ?? undefined,
   }
 }
 
@@ -45,14 +50,22 @@ export async function GET() {
          pt.status,
          pt.created_at,
          pt.updated_at,
-         o.order_number,
-         o.source AS order_source,
-         m.name AS material_name
+       o.order_number,
+       o.source AS order_source,
+       m.name AS material_name,
+        oi.color AS color,
+        oi.item_description AS description
        FROM production_tasks pt
        LEFT JOIN orders o ON o.id = pt.order_id
        LEFT JOIN materials m ON m.id = pt.material_id
+       LEFT JOIN order_items oi ON oi.order_id = pt.order_id AND oi.material_id = pt.material_id
        WHERE o.trashed_at IS NULL
          AND (o.status IS NULL OR lower(o.status) NOT IN ('cancelado', 'finalizado'))
+         -- allow MRP-created orders to appear even if their status is 'RASCUNHO' or 'DRAFT'
+         AND NOT (
+           lower(coalesce(o.status, '')) IN ('rascunho', 'draft')
+           AND lower(coalesce(o.source, '')) <> 'mrp'
+         )
        ORDER BY pt.created_at ASC, pt.id ASC`
     )
 
@@ -89,7 +102,9 @@ export async function POST(request: Request) {
        RETURNING id, order_id, material_id, qty_to_produce, status, created_at, updated_at,
          (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
          (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
-         (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name`
+        (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name,
+        (SELECT color FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS color,
+        (SELECT item_description FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS description`
       ,
       [orderId, materialId, qtyToProduce]
     )
@@ -109,6 +124,16 @@ export async function POST(request: Request) {
     } catch (e) {
       // don't fail the whole request for reservation write issues; log and continue
       console.error('production reservation upsert error', e)
+    }
+    const createdQty = Number(res.rows[0].qty_to_produce ?? 0)
+    if (createdQty > 0) {
+      await notifyProductionTaskCreated({
+        orderId,
+        materialId,
+        orderNumber: res.rows[0].order_number,
+        materialName: res.rows[0].material_name,
+        qty: createdQty,
+      })
     }
 
     return NextResponse.json(toApiTask(res.rows[0]), { status: 201 })

@@ -300,11 +300,11 @@ async function loadProductionTasks(): Promise<{ items: ProductionTask[]; queryMs
        pt.updated_at,
        o.order_number,
        m.name AS material_name
-     FROM production_tasks pt
-     LEFT JOIN orders o ON o.id = pt.order_id
+    FROM production_tasks pt
+    JOIN orders o ON o.id = pt.order_id
      LEFT JOIN materials m ON m.id = pt.material_id
-     WHERE o.trashed_at IS NULL
-       AND (o.status IS NULL OR lower(o.status) NOT IN ('cancelado', 'finalizado'))
+    WHERE o.trashed_at IS NULL
+      AND (o.status IS NULL OR lower(o.status) NOT IN ('cancelado', 'finalizado', 'rascunho', 'draft'))
      ORDER BY pt.created_at ASC, pt.id ASC`
   )
 

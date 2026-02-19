@@ -7,10 +7,12 @@ type ItemPayload = {
   quantity: number
   unitPrice?: number
   shortageAction?: 'PRODUCE' | 'BUY'
+  description?: string | null
   conditions?: { key: string; value: string }[]
 }
 
 type MaterialLookupRow = { id: number }
+type MaterialDescriptionRow = { description: string | null }
 type OrderIdRow = { id: number }
 type CreatedOrderItemRow = {
   order_number: string | null
@@ -46,6 +48,7 @@ export async function POST(request: NextRequest) {
         quantity?: number | string;
         unitPrice?: number | string;
         shortageAction?: 'PRODUCE' | 'BUY' | string
+        description?: string
       }
       let materialIdNum: number | null = null
 
@@ -65,12 +68,14 @@ export async function POST(request: NextRequest) {
       const qty = Number(it.quantity)
       const unitPrice = Number(it.unitPrice ?? 0)
       const shortageAction: 'PRODUCE' | 'BUY' = String(it.shortageAction ?? 'PRODUCE').toUpperCase() === 'BUY' ? 'BUY' : 'PRODUCE'
+      const descriptionValue = typeof it.description === 'string' ? it.description.trim() : ''
+      const normalizedDescription = descriptionValue.length > 0 ? descriptionValue : null
 
       if (!materialIdNum) errors[`items[${idx}].materialId`] = 'materialId é obrigatório'
       if (Number.isNaN(qty) || qty <= 0) errors[`items[${idx}].quantity`] = 'Quantidade inválida'
       if (Number.isNaN(unitPrice) || unitPrice < 0) errors[`items[${idx}].unitPrice`] = 'Preço unitário inválido'
 
-      items.push({ materialId: materialIdNum ?? 0, quantity: qty, unitPrice, shortageAction })
+      items.push({ materialId: materialIdNum ?? 0, quantity: qty, unitPrice, shortageAction, description: normalizedDescription })
     }
 
     if (rawItems.length === 0) errors.items = 'Pedido deve conter pelo menos um item'
@@ -89,10 +94,20 @@ export async function POST(request: NextRequest) {
       )
       const orderId = orderRes.rows[0].id
 
+      const materialDescriptionCache = new Map<number, string | null>()
+      const resolveMaterialDescription = async (materialId: number) => {
+        if (!materialDescriptionCache.has(materialId)) {
+          const matRes = await client.query<MaterialDescriptionRow>('SELECT description FROM materials WHERE id = $1', [materialId])
+          materialDescriptionCache.set(materialId, matRes.rows[0]?.description ?? null)
+        }
+        return materialDescriptionCache.get(materialId) ?? null
+      }
+
       for (const it of items) {
+        const description = it.description ?? (await resolveMaterialDescription(it.materialId))
         await client.query(
-          'INSERT INTO order_items (order_id, material_id, quantity, unit_price, conditions, shortage_action) VALUES ($1,$2,$3,$4,$5,$6)',
-          [orderId, it.materialId, Number(it.quantity), Number(it.unitPrice ?? 0), JSON.stringify(it.conditions ?? []), it.shortageAction ?? 'PRODUCE']
+          'INSERT INTO order_items (order_id, material_id, quantity, unit_price, conditions, shortage_action, item_description) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [orderId, it.materialId, Number(it.quantity), Number(it.unitPrice ?? 0), JSON.stringify(it.conditions ?? []), it.shortageAction ?? 'PRODUCE', description]
         )
       }
 

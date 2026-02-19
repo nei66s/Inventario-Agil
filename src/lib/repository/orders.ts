@@ -30,6 +30,18 @@ function computeReadiness(items: OrderItem[]) {
   return 'READY_PARTIAL'
 }
 
+function parseJson<T>(value: unknown, fallback: T): T {
+  if (value === null || value === undefined) return fallback
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return fallback
+    }
+  }
+  return value as T
+}
+
 type OrderRow = {
   order_id: number
   order_number: string | null
@@ -58,6 +70,7 @@ type OrderRow = {
   separated_weight: string | number | null
   item_condition: string | null
   condition_template_name: string | null
+  conditions: string | { key: string; value: string }[] | null
 }
 
 const orderQuery = `SELECT
@@ -157,7 +170,7 @@ function buildOrdersFromRows(rows: OrderRow[]): Order[] {
         separatedWeight: row.separated_weight ? Number(row.separated_weight) : undefined,
         itemCondition: row.item_condition ?? undefined,
         conditionTemplateName: row.condition_template_name ?? undefined,
-        conditions: Array.isArray((row as any).conditions) ? (row as any).conditions : ((row as any).conditions ? JSON.parse(String((row as any).conditions)) : []),
+        conditions: parseJson(row.conditions, []),
       })
     }
   }

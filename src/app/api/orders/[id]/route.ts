@@ -103,6 +103,20 @@ async function recalcReservationForItem(
   const qtyRequested = Number(itemRes.rows[0].quantity ?? 0)
   const shortageAction = String(itemRes.rows[0].shortage_action ?? 'PRODUCE').toUpperCase()
 
+  const orderStatusRes = await client.query<{ status: string }>('SELECT status FROM orders WHERE id = $1', [orderId])
+  const orderStatus = String(orderStatusRes.rows[0]?.status ?? '').toUpperCase()
+  if (['RASCUNHO', 'DRAFT'].includes(orderStatus)) {
+    await client.query(
+      `UPDATE order_items SET qty_reserved_from_stock = 0, qty_to_produce = 0
+       WHERE id = $1 AND order_id = $2`,
+      [itemId, orderId]
+    )
+    await client.query('DELETE FROM stock_reservations WHERE order_id = $1 AND material_id = $2', [orderId, materialId])
+    await client.query('DELETE FROM production_tasks WHERE order_id = $1 AND material_id = $2', [orderId, materialId])
+    await client.query('DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2', [orderId, materialId])
+    return
+  }
+
   const balRes = await client.query<{ on_hand: string | number }>(
     'SELECT COALESCE(on_hand,0) AS on_hand FROM stock_balances WHERE material_id = $1',
     [materialId]
@@ -143,7 +157,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     try {
       await client.query('BEGIN')
 
+      const orderRow = await client.query<{ status: string }>('SELECT status FROM orders WHERE id = $1', [orderId])
+      const currentStatusRaw = String(orderRow.rows[0]?.status ?? '').trim().toLowerCase()
+      const isDraftOrder = ['rascunho', 'draft'].includes(currentStatusRaw)
+
       if (action === 'update_meta') {
+        if (!isDraftOrder) {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido bloqueado para alteração' }, { status: 403 })
+        }
         const updates: string[] = []
         const values: unknown[] = []
         if (body.clientId) {
@@ -171,20 +193,37 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await client.query(`UPDATE orders SET ${updates.join(', ')} WHERE id = $${values.length}`, values)
         }
       } else if (action === 'update_client') {
+        if (!isDraftOrder) {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido bloqueado para alteração' }, { status: 403 })
+        }
         const nextName = typeof body.clientName === 'string' ? body.clientName.trim() : ''
         await client.query('UPDATE orders SET client_name = $2 WHERE id = $1', [orderId, nextName])
       } else if (action === 'add_item') {
+        if (!isDraftOrder) {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido bloqueado para alteração' }, { status: 403 })
+        }
         const materialId = await resolveMaterialId(client, body.materialId)
         if (!materialId) {
           await client.query('ROLLBACK')
           return NextResponse.json({ error: 'materialId invalido' }, { status: 400 })
         }
+        const descRes = await client.query<{ description: string | null }>(
+          'SELECT description FROM materials WHERE id = $1',
+          [materialId]
+        )
+        const materialDescription = descRes.rows[0]?.description ?? null
         await client.query(
-          `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [orderId, materialId, 0, 0, '', 'PRODUCE']
+          `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [orderId, materialId, 0, 0, '', 'PRODUCE', materialDescription]
         )
       } else if (action === 'remove_item') {
+        if (!isDraftOrder) {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido bloqueado para alteração' }, { status: 403 })
+        }
         const itemId = parseItemId(body.itemId ?? '')
         if (!itemId) {
           await client.query('ROLLBACK')
@@ -202,6 +241,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await client.query('DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2', [orderId, materialId])
         }
       } else if (action === 'update_item') {
+        if (!isDraftOrder) {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido bloqueado para alteração' }, { status: 403 })
+        }
         const itemId = parseItemId(body.itemId ?? '')
         if (!itemId) {
           await client.query('ROLLBACK')
@@ -221,6 +264,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           updates.push(`shortage_action = $${values.length + 1}`)
           values.push(String(body.shortageAction).toUpperCase() === 'BUY' ? 'BUY' : 'PRODUCE')
         }
+        if (body.description !== undefined) {
+          updates.push(`item_description = $${values.length + 1}`)
+          const desc = typeof body.description === 'string' ? body.description.trim() : ''
+          values.push(desc.length > 0 ? desc : null)
+        }
         if (body.itemCondition !== undefined) {
           updates.push(`item_condition = $${values.length + 1}`)
           values.push(String(body.itemCondition))
@@ -235,6 +283,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
         await recalcReservationForItem(client, orderId, itemId, auth.userId)
       } else if (action === 'add_item_condition' || action === 'update_item_condition' || action === 'remove_item_condition') {
+        if (!isDraftOrder) {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido bloqueado para alteração' }, { status: 403 })
+        }
         const itemId = parseItemId(body.itemId ?? '')
         if (!itemId) {
           await client.query('ROLLBACK')

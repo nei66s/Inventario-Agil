@@ -89,7 +89,19 @@ async function renderExitLabel({ pdf, order, pickerName, pageIndex }: LabelRende
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 4;
   const innerWidth = pageWidth - margin * 2;
-  const item = order.items[0] ?? { materialName: 'Material', color: 'Cor', qtySeparated: 0, qtyRequested: 0, uom: 'EA' };
+  const baseItem = order.items[pageIndex] ?? order.items[0] ?? { 
+    materialName: 'Material', 
+    color: 'Cor', 
+    qtySeparated: 0, 
+    qtyRequested: 0, 
+    uom: 'EA',
+    conditions: []
+  };
+  // Garantir que conditions é sempre um array
+  const item = {
+    ...baseItem,
+    conditions: (baseItem.conditions && Array.isArray(baseItem.conditions)) ? baseItem.conditions : []
+  };
   const peso = Math.max(item.qtySeparated, item.qtyRequested);
   const volume = `${pageIndex + 1}/${Math.max(1, order.volumeCount)}`;
 
@@ -108,59 +120,97 @@ async function renderExitLabel({ pdf, order, pickerName, pageIndex }: LabelRende
   pdf.text('São José Cordas', pageWidth / 2, logoY + logoSize + 6, { align: 'center' });
 
   const detailX = margin + 6;
-  const detailStartY = logoY + logoSize + 18;
+  const detailStartY = logoY + logoSize + 12;
   const lines = [
     ['Pedido', order.orderNumber],
     ['Data', simpleDate(order.dueDate ?? order.orderDate)],
     ['Tipo', item.materialName],
-    ['Desc', item.materialName],
+    ['Desc', item.description ?? item.materialName],
     ['Cor', item.color],
     ['Peso', `${peso} ${item.uom}`],
     ['Pac.', volume],
     ['Separador', pickerName ?? '-'],
   ];
-  const warrantyHeight = 48;
+  const warrantyHeight = 32;
   const warrantyY = pageHeight - margin - warrantyHeight;
+  const bottomLimit = warrantyY - 4;
 
   pdf.setFontSize(10);
-  const lineHeight = 8;
+  const lineHeight = 4.8;
   let detailY = detailStartY;
   for (const [label, value] of lines) {
+    if (detailY >= bottomLimit - 6) break;
     pdf.text(`${label}: ${value}`, detailX, detailY);
     detailY += lineHeight;
   }
 
-  const itemsLabelY = detailY + 6;
-  pdf.setFontSize(12);
-  pdf.text('Itens', detailX, itemsLabelY);
-  const itemsDetailY = itemsLabelY + 6;
-  const qty = Math.max(item.qtySeparated, item.qtyRequested);
-  pdf.setFontSize(10);
-  pdf.text(`${item.materialName} | ${item.color} | ${qty} ${item.uom}`, detailX, itemsDetailY);
+  const conditions = Array.isArray(item.conditions) ? item.conditions : [];
+  if (conditions.length > 0) {
+    const condLineHeight = 3.6;
+    const conditionBlockHeight = 3.5 + conditions.length * condLineHeight;
+    const conditionsStartY = detailY + 4;
+    if (conditionsStartY + conditionBlockHeight <= bottomLimit - 2) {
+      pdf.setFontSize(7.5);
+      pdf.text('Condições:', detailX, conditionsStartY);
+      let currentY = conditionsStartY + 3.5;
+      pdf.setFontSize(6.5);
+      for (const [idx, cond] of conditions.entries()) {
+        if (currentY + condLineHeight > bottomLimit - 2) break;
+        const condText = `${cond.key}: ${cond.value}`;
+        pdf.text(condText.slice(0, 50), detailX, currentY);
+        currentY += condLineHeight;
+      }
+      detailY = currentY;
+    }
+  }
 
-  pdf.setLineWidth(0.5);
-  pdf.rect(margin + 3, warrantyY - 4, innerWidth - 6, warrantyHeight);
+  const itemsLabelY = detailY + 6;
+  if (itemsLabelY < bottomLimit - 6) {
+    pdf.setFontSize(11);
+    pdf.text('Itens', detailX, itemsLabelY);
+    const itemsDetailY = itemsLabelY + 5;
+    if (itemsDetailY < bottomLimit - 2) {
+      const qty = Math.max(item.qtySeparated, item.qtyRequested);
+      pdf.setFontSize(9);
+      const itemText = `${item.materialName} | ${item.color} | ${qty} ${item.uom}`;
+      pdf.text(itemText.slice(0, 45), detailX, itemsDetailY);
+    }
+  }
+
   pdf.setFontSize(6.8);
   const warrantyText =
     'Garantia de 1 ano contra defeitos de fabricação ou material, válida a partir da data da compra mediante apresentação do comprovante. Em caso de falha, interrompa o uso e contate imediatamente o fornecedor. A garantia não cobre danos causados por uso inadequado durante a fabricação.';
   pdf.text(warrantyText, margin + 6, warrantyY + 6, { maxWidth: innerWidth - 12 });
-  pdf.text('** Não trocamos material já utilizado **', margin + 6, warrantyY + warrantyHeight - 6);
+  pdf.text('** Não trocamos material já utilizado **', margin + 6, warrantyY + warrantyHeight - 8);
 
-  pdf.setFontSize(9);
-  pdf.text(`Impresso em ${shortDate(new Date().toISOString())}`, pageWidth - margin - 6, pageHeight - margin - 6, { align: 'right' });
+  pdf.setFontSize(6.5);
+  pdf.text(`Impresso em ${shortDate(new Date().toISOString())}`, margin + 6, pageHeight - margin - 4);
 }
 
 async function renderProductionLabel({ pdf, order, pickerName, pageIndex }: LabelRenderContext) {
   const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 4;
-  const item = order.items[0] ?? { materialName: 'Material', color: 'Cor', qtySeparated: 0, qtyRequested: 0, uom: 'EA' };
+  const baseItem = order.items[0] ?? { 
+    materialName: 'Material', 
+    color: 'Cor', 
+    qtySeparated: 0, 
+    qtyRequested: 0, 
+    uom: 'EA',
+    conditions: []
+  };
+  // Garantir que conditions é sempre um array
+  const item = {
+    ...baseItem,
+    conditions: (baseItem.conditions && Array.isArray(baseItem.conditions)) ? baseItem.conditions : []
+  };
   const peso = Math.max(item.qtySeparated, item.qtyRequested);
   const logoY = margin + 4;
   const logoSize = 22;
 
   pdf.setDrawColor(0);
   pdf.setLineWidth(0.6);
-  pdf.rect(margin, margin, pageWidth - margin * 2, pdf.internal.pageSize.getHeight() - margin * 2);
+  pdf.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
   const logoDataUrl = await getLogoDataUrl();
   if (logoDataUrl) {
@@ -172,24 +222,31 @@ async function renderProductionLabel({ pdf, order, pickerName, pageIndex }: Labe
   const detailX = margin + 6;
   let detailY = logoY + logoSize + 16;
   pdf.setFontSize(10);
+  const lineHeight = 5;
   const fields = [
     ['Lote', order.orderNumber],
     ['Data', simpleDate(order.orderDate)],
     ['Tipo', item.materialName],
-    ['Desc', item.materialName],
+    ['Desc', item.description ?? item.materialName],
     ['Cor', item.color],
     ['Peso', `${peso} ${item.uom}`],
     ['Separador', pickerName ?? '-'],
     ['Pac.', `${pageIndex + 1}/${Math.max(1, order.volumeCount)}`],
   ];
+  
+  const maxFieldsY = pageHeight - margin - 12; // Espaço reservado para o QR e texto final
   fields.forEach(([label, value]) => {
-    pdf.text(`${label}: ${value}`, detailX, detailY);
-    detailY += 6;
+    if (detailY < maxFieldsY) {
+      pdf.text(`${label}: ${value}`, detailX, detailY);
+      detailY += lineHeight;
+    }
   });
 
-  pdf.setFontSize(9);
-  pdf.text('Etiqueta de produção para colar após concluir o processo.', detailX, detailY + 4, { maxWidth: pageWidth - detailX - 6 });
-  await addQr(pdf, order, pageIndex, 'PRODUCTION_4x4', pageWidth - margin - 30, margin + 8, 26);
+  detailY = Math.max(detailY + 2, maxFieldsY); // Garante espaço mínimo antes do texto final
+  pdf.setFontSize(8);
+  pdf.text('Etiqueta de produção para colar após concluir o processo.', detailX, detailY, { maxWidth: pageWidth - detailX - 28 });
+  
+  await addQr(pdf, order, pageIndex, 'PRODUCTION_4x4', pageWidth - margin - 26, margin + 4, 24);
 }
 
 export async function generateLabelPdf(order: Order, pickerName?: string, format: LabelFormat = 'EXIT_10x15'): Promise<void> {

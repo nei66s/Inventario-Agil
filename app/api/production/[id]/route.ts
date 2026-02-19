@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
+import { RESERVATION_TTL_MS } from '@/lib/domain/types'
 import pool from '@/lib/db'
+import { notifyAllocationAvailable, notifyOrderProduced } from '@/lib/notifications'
+import { postReceipt } from '@/lib/receipt-helpers'
 
 type DbRow = {
   id: number
@@ -12,6 +15,7 @@ type DbRow = {
   order_number: string | null
   material_name: string | null
   order_source: string | null
+  order_created_by: string | null
 }
 
 function toApiTask(row: DbRow) {
@@ -62,6 +66,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         RETURNING id, order_id, material_id, qty_to_produce, status, created_at, updated_at,
           (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
           (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
+          (SELECT created_by FROM orders WHERE id = production_tasks.order_id) AS order_created_by,
           (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name
       `
     } else {
@@ -91,32 +96,78 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
              updated_at = now()
            WHERE id = $1
            RETURNING id, order_id, material_id, qty_to_produce, status, created_at, updated_at,
-             (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
-             (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
-             (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name`,
+          (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
+          (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
+          (SELECT created_by FROM orders WHERE id = production_tasks.order_id) AS order_created_by,
+          (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name`,
           [taskId]
         );
+
+        if (upd.rowCount === 0) {
+          await client.query('ROLLBACK');
+          return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 });
+        }
+
+        const orderNumber = upd.rows[0].order_number ?? `O-${upd.rows[0].order_id}`;
+        const orderCreatedBy = upd.rows[0].order_created_by ?? null;
+        const materialName = upd.rows[0].material_name ?? `M-${materialId}`;
+        const orderId = upd.rows[0].order_id;
 
         if (qtyProduced <= 0) {
           // If nothing was produced, clear any lingering reservation
           await client.query(
             `DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`,
-            [upd.rows[0].order_id, materialId]
+            [orderId, materialId]
           );
-        }
-
-        // Create inventory receipt draft for produced qty
-        if (qtyProduced > 0) {
+        } else {
+          await client.query(
+            `DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`,
+            [orderId, materialId]
+          );
           const receiptRes = await client.query<{ id: number }>(
             `INSERT INTO inventory_receipts (type, status, source_ref)
              VALUES ('PRODUCTION', 'DRAFT', $1) RETURNING id`,
-            [upd.rows[0].order_number ?? `O-${upd.rows[0].order_id}`]
+            [orderNumber]
           );
           const receiptId = receiptRes.rows[0].id;
           await client.query(
             `INSERT INTO inventory_receipt_items (receipt_id, material_id, qty, uom)
              VALUES ($1, $2, $3, (SELECT unit FROM materials WHERE id = $2))`,
             [receiptId, materialId, qtyProduced]
+          );
+          await postReceipt(client, receiptId, {
+            postedBy: null,
+            autoAllocate: true,
+            productionOrderId: orderId,
+          });
+          const expiresAt = new Date(Date.now() + RESERVATION_TTL_MS).toISOString();
+          await client.query(
+            `INSERT INTO stock_reservations (order_id, material_id, user_id, qty, expires_at, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,now(),now())
+             ON CONFLICT (order_id, material_id)
+             DO UPDATE SET qty = EXCLUDED.qty, user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at, updated_at = now()`,
+            [orderId, materialId, null, qtyProduced, expiresAt]
+          );
+          await notifyAllocationAvailable(
+            {
+              orderId,
+              materialId,
+              orderNumber,
+              materialName,
+              qty: qtyProduced,
+            },
+            client
+          );
+          await notifyOrderProduced(
+            {
+              orderId,
+              materialId,
+              orderNumber,
+              materialName,
+              qty: qtyProduced,
+              userTarget: orderCreatedBy,
+            },
+            client
           );
         }
 
@@ -152,6 +203,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
     return NextResponse.json(toApiTask(row));
   } catch (err: unknown) {
+    console.error('production PATCH error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }

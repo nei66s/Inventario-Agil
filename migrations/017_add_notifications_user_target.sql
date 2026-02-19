@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE notifications
+  ADD COLUMN IF NOT EXISTS user_target TEXT REFERENCES users(id) ON DELETE SET NULL;
+
+COMMIT;

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Factory, Star } from 'lucide-react';
+import { Factory, Star, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,13 +14,20 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatDate } from '@/lib/utils';
+import { generateLabelPdf } from '@/lib/domain/labels';
+import type { Order } from '@/lib/domain/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { productionTaskStatusLabel } from '@/lib/domain/i18n';
+import { notifyDataRefreshed } from '@/lib/data-refresh';
 
 type ProductionTask = {
   id: string;
   orderNumber: string;
+  orderId: string;
   materialName: string;
+  description?: string;
+  materialId: string;
+  color?: string;
   qtyToProduce: number;
   status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
   updatedAt: string;
@@ -34,30 +41,61 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
+type LoadTasksOptions = {
+  skipLoading?: boolean;
+};
+
 export default function ProductionPage() {
   const [serverTasks, setServerTasks] = React.useState<ProductionTask[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = React.useState<string | null>(null);
+  const [busyLabelTaskId, setBusyLabelTaskId] = React.useState<string | null>(null);
+  const tasksFingerprintRef = React.useRef('');
 
-  const loadTasks = React.useCallback(async () => {
-    setLoading(true);
+  const loadTasks = React.useCallback(async (opts?: LoadTasksOptions) => {
+    const skipLoading = opts?.skipLoading;
+    if (!skipLoading) {
+      setLoading(true);
+    }
     setError(null);
+    let refreshed = false;
     try {
       const res = await fetch('/api/production', { cache: 'no-store' });
       if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-      const data = await res.json();
-      setServerTasks(Array.isArray(data) ? data : []);
+      const data = (await res.json()) as unknown;
+      const items = Array.isArray(data) ? data : [];
+      const nextFingerprint = JSON.stringify(items);
+      if (nextFingerprint !== tasksFingerprintRef.current) {
+        tasksFingerprintRef.current = nextFingerprint;
+        setServerTasks(items);
+        refreshed = true;
+      } else {
+        refreshed = false;
+      }
     } catch (err: unknown) {
       setError(errorMessage(err) || 'Falha ao carregar tarefas de producao');
       setServerTasks([]);
+      tasksFingerprintRef.current = '[]';
     } finally {
-      setLoading(false);
+      if (!skipLoading) {
+        setLoading(false);
+      }
+      if (refreshed) {
+        notifyDataRefreshed();
+      }
     }
   }, []);
 
   React.useEffect(() => {
     loadTasks();
+  }, [loadTasks]);
+
+  React.useEffect(() => {
+    const id = window.setInterval(() => {
+      loadTasks({ skipLoading: true });
+    }, 15000);
+    return () => window.clearInterval(id);
   }, [loadTasks]);
 
   const tasks = React.useMemo(() => {
@@ -73,7 +111,7 @@ export default function ProductionPage() {
         body: JSON.stringify({ action }),
       });
       if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-      await loadTasks();
+      await loadTasks({ skipLoading: true });
     } catch (err: unknown) {
       setError(errorMessage(err) || 'Falha ao atualizar tarefa');
     } finally {
@@ -81,21 +119,58 @@ export default function ProductionPage() {
     }
   };
 
-  const approveAllocation = async (task: ProductionTask) => {
-    if (!task.pendingReceiptId) return;
+  const handlePrintProductionLabel = async (task: ProductionTask) => {
+    setError(null);
+    setBusyLabelTaskId(task.id);
+    const qty = Math.max(0, Number(task.qtyToProduce ?? 0));
+    const orderDate = task.createdAt ?? new Date().toISOString();
+    const dueDate = task.updatedAt ?? orderDate;
+    const labelOrder: Order = {
+      id: task.orderId,
+      orderNumber: task.orderNumber,
+      clientId: '',
+      clientName: '',
+      status: 'ABERTO',
+      readiness: 'NOT_READY',
+      orderDate,
+      dueDate,
+      createdBy: '',
+      pickerId: undefined,
+      volumeCount: 1,
+      items: [
+        {
+          id: `${task.id}-item`,
+          materialId: task.materialId,
+          materialName: task.materialName,
+          description: task.description ?? task.materialName,
+          uom: 'EA',
+          color: task.color ?? '',
+          shortageAction: 'PRODUCE',
+          qtyRequested: qty,
+          qtyReservedFromStock: 0,
+          qtyToProduce: qty,
+          qtySeparated: qty,
+          separatedWeight: qty,
+          conditions: [],
+        },
+      ],
+      auditTrail: [],
+      labelPrintCount: 0,
+      total: 0,
+      trashedAt: null,
+    };
     try {
-      setBusyTaskId(task.id);
-      const res = await fetch(`/api/receipts/${task.pendingReceiptId}`, {
+      await generateLabelPdf(labelOrder, undefined, 'PRODUCTION_4x4');
+      const res = await fetch(`/api/orders/${task.orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'post', autoAllocate: true }),
+        body: JSON.stringify({ action: 'register_label_print', format: 'PRODUCTION_4x4' }),
       });
-      if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
-      await loadTasks();
+      if (!res.ok) throw new Error(`Falha ao registrar etiqueta (${res.status})`);
     } catch (err: unknown) {
-      setError(errorMessage(err) || 'Falha ao aprovar alocacao');
+      setError(errorMessage(err) || 'Falha ao imprimir etiqueta');
     } finally {
-      setBusyTaskId(null);
+      setBusyLabelTaskId(null);
     }
   };
 
@@ -106,12 +181,10 @@ export default function ProductionPage() {
           <div>
             <CardTitle className="font-headline flex items-center gap-2"><Factory className="h-5 w-5" /> Producao</CardTitle>
             <CardDescription>
-              Tarefas de producao persistidas no banco. Concluir cria aprovacao pendente de alocacao do estoque.
+              Tarefas de producao persistidas no banco. Concluir reserva automaticamente o estoque produzido por 5 minutos antes de liberar para o picking.
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" onClick={() => loadTasks()} disabled={loading}>
-            Recarregar
-          </Button>
+          <p className="text-xs text-muted-foreground">Dados atualizados automaticamente.</p>
         </div>
       </CardHeader>
       {error ? (
@@ -122,25 +195,27 @@ export default function ProductionPage() {
       <CardContent>
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Pedido</TableHead>
-              <TableHead>Material</TableHead>
-              <TableHead className="text-right">Qtd. para produzir</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Atualizado</TableHead>
-              <TableHead className="text-right">Acoes</TableHead>
-            </TableRow>
+              <TableRow>
+                <TableHead>Pedido</TableHead>
+                <TableHead>Material</TableHead>
+                <TableHead>Desc</TableHead>
+                <TableHead>Cor</TableHead>
+                <TableHead className="text-right">Qtd. para produzir</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Atualizado</TableHead>
+                <TableHead className="text-right">Acoes</TableHead>
+              </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Carregando tarefas...
                 </TableCell>
               </TableRow>
             ) : tasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="border-none py-8">
+                <TableCell colSpan={8} className="border-none py-8">
                   <EmptyState icon={Factory} title="Sem tarefas de producao" description="Crie pedidos para gerar tarefas ou adicione tarefas na tabela production_tasks." className="min-h-[120px]" />
                 </TableCell>
               </TableRow>
@@ -159,6 +234,8 @@ export default function ProductionPage() {
                     </div>
                   </TableCell>
                   <TableCell>{task.materialName}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{task.description ?? task.materialName}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{task.color ?? ''}</TableCell>
                   <TableCell className="text-right">{task.qtyToProduce}</TableCell>
                   <TableCell>
                     <Badge variant={task.status === 'DONE' ? 'positive' : task.status === 'IN_PROGRESS' ? 'warning' : 'outline'}>
@@ -186,10 +263,11 @@ export default function ProductionPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={task.status !== 'DONE' || !task.pendingReceiptId || busyTaskId === task.id}
-                        onClick={() => approveAllocation(task)}
+                        disabled={busyLabelTaskId === task.id || busyTaskId === task.id}
+                        onClick={() => handlePrintProductionLabel(task)}
                       >
-                        Aprovar alocacao
+                        <FileText className="mr-1 h-3 w-3" />
+                        Etiqueta 4x4
                       </Button>
                     </div>
                   </TableCell>

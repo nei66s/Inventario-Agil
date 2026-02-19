@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pool from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { notifyOrderCompleted } from '@/lib/notifications'
 
 type RouteParams = { id: string }
 
@@ -179,10 +180,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await client.query('ROLLBACK')
           return NextResponse.json({ error: 'materialId invalido' }, { status: 400 })
         }
+        const descRes = await client.query<{ description: string | null }>(
+          'SELECT description FROM materials WHERE id = $1',
+          [materialId]
+        )
+        const materialDescription = descRes.rows[0]?.description ?? null
         await client.query(
-          `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [orderId, materialId, 0, 0, '', 'PRODUCE']
+          `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [orderId, materialId, 0, 0, '', 'PRODUCE', materialDescription]
         )
       } else if (action === 'remove_item') {
         const itemId = parseItemId(body.itemId ?? '')
@@ -220,6 +226,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (body.shortageAction !== undefined) {
           updates.push(`shortage_action = $${values.length + 1}`)
           values.push(String(body.shortageAction).toUpperCase() === 'BUY' ? 'BUY' : 'PRODUCE')
+        }
+        if (body.description !== undefined) {
+          updates.push(`item_description = $${values.length + 1}`)
+          const desc = typeof body.description === 'string' ? body.description.trim() : ''
+          values.push(desc.length > 0 ? desc : null)
         }
         if (body.itemCondition !== undefined) {
           updates.push(`item_condition = $${values.length + 1}`)
@@ -360,6 +371,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           `INSERT INTO audit_events (order_id, action, actor, timestamp, details)
            VALUES ($1, $2, $3, now(), $4)`,
           [orderId, 'PICKING_COMPLETED', auth.userId, `Pedido concluido com status ${nextStatus}.`]
+        )
+        const orderMeta = await client.query<{ created_by: string | null; order_number: string | null }>(
+          'SELECT created_by, order_number FROM orders WHERE id = $1',
+          [orderId]
+        )
+        await notifyOrderCompleted(
+          {
+            orderId,
+            orderNumber: orderMeta.rows[0]?.order_number ?? null,
+            status: nextStatus,
+            userTarget: orderMeta.rows[0]?.created_by ?? null,
+          },
+          client
         )
       } else if (action === 'register_label_print') {
         await client.query('UPDATE orders SET label_print_count = COALESCE(label_print_count,0) + 1 WHERE id = $1', [

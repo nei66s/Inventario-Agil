@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Factory, Star } from 'lucide-react';
+import { Factory, Star, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,13 +14,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatDate } from '@/lib/utils';
+import { generateLabelPdf } from '@/lib/domain/labels';
+import type { Order } from '@/lib/domain/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { productionTaskStatusLabel } from '@/lib/domain/i18n';
 
 type ProductionTask = {
   id: string;
   orderNumber: string;
+  orderId: string;
   materialName: string;
+  description?: string;
+  materialId: string;
+  color?: string;
   qtyToProduce: number;
   status: 'PENDING' | 'IN_PROGRESS' | 'DONE';
   updatedAt: string;
@@ -39,6 +45,7 @@ export default function ProductionPage() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = React.useState<string | null>(null);
+  const [busyLabelTaskId, setBusyLabelTaskId] = React.useState<string | null>(null);
 
   const loadTasks = React.useCallback(async () => {
     setLoading(true);
@@ -78,6 +85,61 @@ export default function ProductionPage() {
       setError(errorMessage(err) || 'Falha ao atualizar tarefa');
     } finally {
       setBusyTaskId(null);
+    }
+  };
+
+  const handlePrintProductionLabel = async (task: ProductionTask) => {
+    setError(null);
+    setBusyLabelTaskId(task.id);
+    const qty = Math.max(0, Number(task.qtyToProduce ?? 0));
+    const orderDate = task.createdAt ?? new Date().toISOString();
+    const dueDate = task.updatedAt ?? orderDate;
+    const labelOrder: Order = {
+      id: task.orderId,
+      orderNumber: task.orderNumber,
+      clientId: '',
+      clientName: '',
+      status: 'ABERTO',
+      readiness: 'NOT_READY',
+      orderDate,
+      dueDate,
+      createdBy: '',
+      pickerId: undefined,
+      volumeCount: 1,
+      items: [
+        {
+          id: `${task.id}-item`,
+          materialId: task.materialId,
+          materialName: task.materialName,
+          description: task.description ?? task.materialName,
+          uom: 'EA',
+          color: task.color ?? '',
+          shortageAction: 'PRODUCE',
+          qtyRequested: qty,
+          qtyReservedFromStock: 0,
+          qtyToProduce: qty,
+          qtySeparated: qty,
+          separatedWeight: qty,
+          conditions: [],
+        },
+      ],
+      auditTrail: [],
+      labelPrintCount: 0,
+      total: 0,
+      trashedAt: null,
+    };
+    try {
+      await generateLabelPdf(labelOrder, undefined, 'PRODUCTION_4x4');
+      const res = await fetch(`/api/orders/${task.orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register_label_print', format: 'PRODUCTION_4x4' }),
+      });
+      if (!res.ok) throw new Error(`Falha ao registrar etiqueta (${res.status})`);
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Falha ao imprimir etiqueta');
+    } finally {
+      setBusyLabelTaskId(null);
     }
   };
 
@@ -125,6 +187,8 @@ export default function ProductionPage() {
             <TableRow>
               <TableHead>Pedido</TableHead>
               <TableHead>Material</TableHead>
+              <TableHead>Desc</TableHead>
+              <TableHead>Cor</TableHead>
               <TableHead className="text-right">Qtd. para produzir</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Atualizado</TableHead>
@@ -134,13 +198,13 @@ export default function ProductionPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Carregando tarefas...
                 </TableCell>
               </TableRow>
             ) : tasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="border-none py-8">
+                <TableCell colSpan={8} className="border-none py-8">
                   <EmptyState icon={Factory} title="Sem tarefas de producao" description="Crie pedidos para gerar tarefas ou adicione tarefas na tabela production_tasks." className="min-h-[120px]" />
                 </TableCell>
               </TableRow>
@@ -159,6 +223,8 @@ export default function ProductionPage() {
                     </div>
                   </TableCell>
                   <TableCell>{task.materialName}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{task.description ?? task.materialName}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{task.color ?? ''}</TableCell>
                   <TableCell className="text-right">{task.qtyToProduce}</TableCell>
                   <TableCell>
                     <Badge variant={task.status === 'DONE' ? 'positive' : task.status === 'IN_PROGRESS' ? 'warning' : 'outline'}>
@@ -190,6 +256,15 @@ export default function ProductionPage() {
                         onClick={() => approveAllocation(task)}
                       >
                         Aprovar alocacao
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyLabelTaskId === task.id || busyTaskId === task.id}
+                        onClick={() => handlePrintProductionLabel(task)}
+                      >
+                        <FileText className="mr-1 h-3 w-3" />
+                        Etiqueta 4x4
                       </Button>
                     </div>
                   </TableCell>

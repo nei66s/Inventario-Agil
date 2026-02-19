@@ -36,7 +36,7 @@ async function allocateToOrders(
      JOIN orders o ON o.id = oi.order_id
      WHERE oi.material_id = $1
        AND o.trashed_at IS NULL
-       AND (o.status IS NULL OR lower(o.status) NOT IN ('cancelado', 'finalizado'))
+       AND (o.status IS NULL OR lower(o.status) NOT IN ('cancelado', 'finalizado', 'rascunho', 'draft'))
      ORDER BY o.created_at ASC`,
     [materialId]
   )

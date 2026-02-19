@@ -18,47 +18,85 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { generateLabelPdf } from '@/lib/domain/labels';
 import { readinessLabel, readinessTabLabel } from '@/lib/domain/i18n';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { notifyDataRefreshed } from '@/lib/data-refresh';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Order, StockBalance, User } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
+
+type LoadPickingOptions = {
+  skipLoading?: boolean;
+};
 
 export default function PickingPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [stockBalances, setStockBalances] = useState<StockBalance[]>([]);
   const [loading, setLoading] = useState(true);
+  const dataFingerprintRef = useRef('');
 
   const [filter, setFilter] = React.useState<'READY_FULL' | 'READY_PARTIAL' | 'ALL'>('ALL');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (opts?: LoadPickingOptions) => {
+    const skipLoading = opts?.skipLoading;
+    if (!skipLoading) {
+      setLoading(true);
+    }
+    let refreshed = false;
     try {
       const [ordersRes, usersRes, inventoryRes] = await Promise.all([
         fetch('/api/orders', { cache: 'no-store' }),
         fetch('/api/users', { cache: 'no-store' }),
         fetch('/api/inventory', { cache: 'no-store' }),
       ]);
-      if (ordersRes.ok) {
-        const payload = await ordersRes.json();
-        setOrders(Array.isArray(payload) ? payload : []);
+      if (!ordersRes.ok || !usersRes.ok || !inventoryRes.ok) {
+        return;
       }
-      if (usersRes.ok) {
-        const payload = await usersRes.json();
-        setUsers(Array.isArray(payload) ? payload : []);
-      }
-      if (inventoryRes.ok) {
-        const payload = await inventoryRes.json();
-        setStockBalances(Array.isArray(payload.stockBalances) ? payload.stockBalances : []);
+
+      const [ordersPayload, usersPayload, inventoryPayload] = await Promise.all([
+        ordersRes.json(),
+        usersRes.json(),
+        inventoryRes.json(),
+      ]);
+
+      const nextOrders = Array.isArray(ordersPayload) ? ordersPayload : [];
+      const nextUsers = Array.isArray(usersPayload) ? usersPayload : [];
+      const nextStockBalances = Array.isArray(inventoryPayload.stockBalances)
+        ? inventoryPayload.stockBalances
+        : [];
+
+      const nextFingerprint = JSON.stringify({
+        orders: nextOrders,
+        users: nextUsers,
+        stockBalances: nextStockBalances,
+      });
+      if (nextFingerprint !== dataFingerprintRef.current) {
+        dataFingerprintRef.current = nextFingerprint;
+        setOrders(nextOrders);
+        setUsers(nextUsers);
+        setStockBalances(nextStockBalances);
+        refreshed = true;
       }
     } finally {
-      setLoading(false);
+      if (!skipLoading) {
+        setLoading(false);
+      }
+      if (refreshed) {
+        notifyDataRefreshed();
+      }
     }
   }, []);
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      loadData({ skipLoading: true });
+    }, 15000);
+    return () => window.clearInterval(id);
   }, [loadData]);
 
   const queue = orders
@@ -218,7 +256,9 @@ export default function PickingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Material</TableHead>
+                <TableHead>Material</TableHead>
+                <TableHead>Desc</TableHead>
+                <TableHead>Cor</TableHead>
                     <TableHead className="text-right">Peso</TableHead>
                     <TableHead className="text-right">Qtd. solicitada</TableHead>
                     <TableHead className="text-right">Qtd. reservada</TableHead>
@@ -232,26 +272,28 @@ export default function PickingPage() {
                     return (
                       <React.Fragment key={item.id}>
                         <TableRow>
-                          <TableCell>
-                            <p className="font-medium">{item.materialName}</p>
-                            <p className="text-xs text-muted-foreground">{item.uom} - {item.color}</p>
-                            {item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0 ? (
+                  <TableCell>
+                    <p className="font-medium">{item.materialName}</p>
+                    <p className="text-xs text-muted-foreground">{item.uom}</p>
+                    {item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0 ? (
                               <div className="mt-1">
                                 <Badge variant="outline">Em produção</Badge>
                               </div>
                             ) : null}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              className="ml-auto w-28 text-right"
-                              value={item.separatedWeight ?? ''}
-                              onChange={(e) => updateSeparatedWeightLocal(selected.id, item.id, Number(e.target.value))}
-                              onBlur={(e) => commitSeparatedWeight(selected.id, item.id, Number(e.target.value))}
-                            />
-                          </TableCell>
+                  </TableCell>
+                  <TableCell className="text-left text-sm text-muted-foreground">{item.description ?? item.materialName}</TableCell>
+                  <TableCell className="text-left text-sm text-muted-foreground">{item.color}</TableCell>
+                  <TableCell className="text-right">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      className="ml-auto w-28 text-right"
+                      value={item.separatedWeight ?? ''}
+                      onChange={(e) => updateSeparatedWeightLocal(selected.id, item.id, Number(e.target.value))}
+                      onBlur={(e) => commitSeparatedWeight(selected.id, item.id, Number(e.target.value))}
+                    />
+                  </TableCell>
                           <TableCell className="text-right">{item.qtyRequested}</TableCell>
                           <TableCell className="text-right">{item.qtyReservedFromStock}</TableCell>
                           <TableCell className="text-right">{currentStock?.onHand ?? 0}</TableCell>
@@ -270,7 +312,7 @@ export default function PickingPage() {
                           </TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell colSpan={6} className="bg-muted/30">
+                          <TableCell colSpan={8} className="bg-muted/30">
                             <div className="space-y-2">
                               <Label>Condições do item</Label>
                               {item.conditions && item.conditions.length > 0 ? (
