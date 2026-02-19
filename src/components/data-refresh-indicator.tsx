@@ -9,7 +9,7 @@ export function DataRefreshIndicator() {
   const [beaming, setBeaming] = useState(false);
 
   useEffect(() => {
-    let timeoutId: ReturnType<typeof window.setTimeout> | null = null;
+    let timeoutId: number | null = null;
 
     const handle = () => {
       setBeaming(true);
