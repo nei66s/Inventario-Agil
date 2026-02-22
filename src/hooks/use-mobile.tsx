@@ -2,13 +2,9 @@ import * as React from "react"
 
 const MOBILE_BREAKPOINT = 1024
 
-function getIsMobile() {
-  if (typeof window === "undefined") return undefined
-  return window.innerWidth < MOBILE_BREAKPOINT
-}
-
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(getIsMobile)
+  // Keep the first client render identical to SSR to avoid hydration mismatch.
+  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)

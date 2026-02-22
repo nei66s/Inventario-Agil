@@ -115,14 +115,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <SidebarProvider defaultOpen={false}>
-        <Sidebar className="text-sidebar-foreground lg:w-72 border-r-0 bg-transparent">
-          <SidebarHeader className="rounded-3xl border border-slate-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl p-4 shadow-sm text-sidebar-foreground">
+        <Sidebar className="text-sidebar-foreground lg:w-72 border-0 shadow-none bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl group-data-[side=left]:border-r-0 group-data-[side=right]:border-l-0">
+          <SidebarHeader className="p-0 px-4 pt-4 pb-3 border-0 shadow-none text-sidebar-foreground">
             <Logo className="px-1 py-1" />
           </SidebarHeader>
-          <SidebarContent className="flex flex-col gap-5 rounded-3xl border border-slate-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl px-3 py-6 shadow-sm">
-            <div className="relative flex flex-col gap-4">
+          <SidebarContent className="flex flex-col gap-2 p-0 px-2 pb-4 pt-2">
+            <div className="relative flex flex-col gap-2">
               {/* Painel group with quick indicators */}
-              <SidebarGroup>
+              <SidebarGroup className="p-1">
                 <SidebarGroupLabel>Indicadores</SidebarGroupLabel>
                 <SidebarMenu>
                   <SidebarMenuItem key="/dashboard">
@@ -135,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroup>
-              <SidebarGroup>
+              <SidebarGroup className="p-1">
                 <SidebarGroupLabel>Pedidos</SidebarGroupLabel>
                 <SidebarMenu>
                   <SidebarMenuItem key="/orders">
@@ -167,7 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </SidebarMenu>
               </SidebarGroup>
 
-              <SidebarGroup>
+              <SidebarGroup className="p-1">
                 <SidebarGroupLabel>Operacoes</SidebarGroupLabel>
                 <SidebarMenu>
                   {navItems
@@ -192,7 +192,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </SidebarMenu>
               </SidebarGroup>
 
-              <SidebarGroup>
+              <SidebarGroup className="p-1">
                 <SidebarGroupLabel>Administracao</SidebarGroupLabel>
                 <SidebarMenu>
                   {navItems

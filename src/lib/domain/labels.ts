@@ -115,11 +115,11 @@ async function renderExitLabel({ pdf, order, pickerName, pageIndex }: LabelRende
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 4;
   const innerWidth = pageWidth - margin * 2;
-  const baseItem = order.items[pageIndex] ?? order.items[0] ?? { 
-    materialName: 'Material', 
-    color: 'Cor', 
-    qtySeparated: 0, 
-    qtyRequested: 0, 
+  const baseItem = order.items[pageIndex] ?? order.items[0] ?? {
+    materialName: 'Material',
+    color: 'Cor',
+    qtySeparated: 0,
+    qtyRequested: 0,
     uom: 'EA',
     conditions: []
   };
@@ -217,64 +217,78 @@ async function renderExitLabel({ pdf, order, pickerName, pageIndex }: LabelRende
 async function renderProductionLabel({ pdf, order, pickerName, pageIndex }: LabelRenderContext) {
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 4;
-  const baseItem = order.items[0] ?? { 
-    materialName: 'Material', 
-    color: 'Cor', 
-    qtySeparated: 0, 
-    qtyRequested: 0, 
+  const margin = 2; // Margem reduzida para 40x40
+  const baseItem = order.items[0] ?? {
+    materialName: 'Material',
+    color: 'Cor',
+    qtySeparated: 0,
+    qtyRequested: 0,
+    qtyToProduce: 0,
     uom: 'EA',
     conditions: []
   };
-  // Garantir que conditions é sempre um array
+
   const item = {
     ...baseItem,
     conditions: (baseItem.conditions && Array.isArray(baseItem.conditions)) ? baseItem.conditions : []
   };
-  const peso = Math.max(item.qtySeparated, item.qtyRequested);
-  const logoY = margin + 4;
-  const logoSize = 22;
+
+  const peso = Math.max(item.qtySeparated, item.qtyToProduce ?? item.qtyRequested);
 
   pdf.setDrawColor(0);
-  pdf.setLineWidth(0.6);
+  pdf.setLineWidth(0.4);
   pdf.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
   const siteSettings = await fetchSiteSettingsSafely();
-  const logoDataUrl = await resolveLogoDataUrl(siteSettings.logoDataUrl, siteSettings.logoUrl);
-  if (logoDataUrl) {
-    pdf.addImage(logoDataUrl, 'PNG', pageWidth / 2 - logoSize / 2, logoY, logoSize, logoSize);
+  pdf.setFontSize(7);
+  pdf.text(siteSettings.companyName.slice(0, 20), margin + 2, margin + 4);
+
+  // QR Code on Top Right (smaller)
+  const qrSize = 14;
+  await addQr(pdf, order, pageIndex, 'PRODUCTION_4x4', pageWidth - margin - qrSize - 1, margin + 1, qrSize);
+
+  const detailX = margin + 2;
+  let detailY = margin + 8;
+
+  pdf.setFontSize(8);
+  pdf.text(`${order.orderNumber}`, detailX, detailY);
+
+  detailY += 4;
+  pdf.setFontSize(7);
+  pdf.text(`Prod: ${peso} ${item.uom}`, detailX, detailY);
+
+  detailY += 4;
+  pdf.text(`Mat: ${item.materialName.slice(0, 20)}`, detailX, detailY);
+
+  if (item.color) {
+    detailY += 3.5;
+    pdf.text(`Cor: ${item.color.slice(0, 20)}`, detailX, detailY);
   }
 
-  pdf.setFontSize(14);
-  pdf.text(siteSettings.companyName, pageWidth / 2, logoY + logoSize + 8, { align: 'center' });
-  const detailX = margin + 6;
-  let detailY = logoY + logoSize + 16;
-  pdf.setFontSize(10);
-  const lineHeight = 5;
-  const fields = [
-    ['Lote', order.orderNumber],
-    ['Data', simpleDate(order.orderDate)],
-    ['Tipo', item.materialName],
-    ['Desc', item.description ?? item.materialName],
-    ['Cor', item.color],
-    ['Peso', `${peso} ${item.uom}`],
-    ['Separador', pickerName ?? '-'],
-    ['Pac.', `${pageIndex + 1}/${Math.max(1, order.volumeCount)}`],
-  ];
-  
-  const maxFieldsY = pageHeight - margin - 12; // Espaço reservado para o QR e texto final
-  fields.forEach(([label, value]) => {
-    if (detailY < maxFieldsY) {
-      pdf.text(`${label}: ${value}`, detailX, detailY);
-      detailY += lineHeight;
+  const conditions = item.conditions;
+  if (conditions.length > 0) {
+    detailY += 3.5;
+    pdf.setFontSize(6);
+    pdf.text('Condições:', detailX, detailY);
+    detailY += 3;
+    for (const cond of conditions) {
+      if (detailY > pageHeight - margin - 3) break;
+      const condText = `${cond.key}: ${cond.value}`;
+      pdf.text(condText.slice(0, 30), detailX, detailY);
+      detailY += 3;
     }
-  });
+  }
 
-  detailY = Math.max(detailY + 2, maxFieldsY); // Garante espaço mínimo antes do texto final
-  pdf.setFontSize(8);
-  pdf.text('Etiqueta de produção para colar após concluir o processo.', detailX, detailY, { maxWidth: pageWidth - detailX - 28 });
-  
-  await addQr(pdf, order, pageIndex, 'PRODUCTION_4x4', pageWidth - margin - 26, margin + 4, 24);
+  if (item.description && detailY < pageHeight - margin - 5) {
+    detailY += 1;
+    pdf.setFontSize(5);
+    pdf.text(item.description.slice(0, 60), detailX, detailY, { maxWidth: pageWidth - margin * 2 - 4 });
+  }
+
+  // Footer
+  pdf.setFontSize(5);
+  const footerText = `${simpleDate(order.orderDate)} - Pç: ${pageIndex + 1}/${Math.max(1, order.volumeCount)}`;
+  pdf.text(footerText, margin + 2, pageHeight - margin - 1);
 }
 
 export async function generateLabelPdf(order: Order, pickerName?: string, format: LabelFormat = 'EXIT_10x15'): Promise<void> {
