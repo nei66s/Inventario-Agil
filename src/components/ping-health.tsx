@@ -28,22 +28,17 @@ const statusConfig: Record<Status, { label: string; border: string; bg: string; 
 
 export default function PingHealth() {
   const [status, setStatus] = React.useState<Status>('loading');
-  const [latency, setLatency] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
 
     const measurePing = async () => {
-      const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
       try {
         const res = await fetch('/api/ping', { cache: 'no-store' });
         if (!mounted) return;
-        const elapsed = Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - start);
-        setLatency(elapsed);
         setStatus(res.ok ? 'connected' : 'disconnected');
       } catch {
         if (!mounted) return;
-        setLatency(null);
         setStatus('disconnected');
       }
     };
@@ -59,17 +54,15 @@ export default function PingHealth() {
   const cfg = statusConfig[status];
   const Icon = status === 'disconnected' ? WifiOff : status === 'loading' ? Loader2 : Wifi;
 
-  const latencyLabel = latency ? `${latency} ms` : '—';
-
   return (
     <span
       role="status"
-      aria-label={`${cfg.label} ${latency ? `${latency} ms` : ''}`}
-      title={`${cfg.label}${latency ? ` · ${latency} ms` : ''}`}
-      className={`inline-flex min-w-[80px] items-center gap-1 rounded-2xl border ${cfg.border} ${cfg.bg} px-2 py-1 text-slate-700 shadow-sm transition`}
+      aria-label={cfg.label}
+      title={cfg.label}
+      className={`inline-flex w-fit items-center gap-1 rounded-2xl border ${cfg.border} ${cfg.bg} px-2 py-1 text-slate-700 shadow-sm transition`}
     >
       <Icon className={`${cfg.iconColor} ${status === 'loading' ? 'animate-spin' : ''} h-5 w-5`} />
-      <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">{latencyLabel}</span>
+      <span className="sr-only">{cfg.label}</span>
     </span>
   );
 }

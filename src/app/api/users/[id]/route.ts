@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { pool } from '@/lib/db';
+import { getPool } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { Role } from '@/lib/domain/types';
 
@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (typeof body.email === 'string') {
       const next = body.email.trim().toLowerCase();
       if (next) {
-        const conflict = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2', [
+        const conflict = await getPool().query('SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2', [
           next,
           targetId,
         ]);
@@ -67,9 +67,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     values.push(targetId);
-    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length}`, values);
+    await getPool().query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length}`, values);
 
-    const updated = await pool.query('SELECT id, name, email, role, avatar_url FROM users WHERE id = $1', [targetId]);
+    const updated = await getPool().query('SELECT id, name, email, role, avatar_url FROM users WHERE id = $1', [targetId]);
     if (updated.rowCount === 0) {
       return NextResponse.json({ message: 'Usuario nao encontrado' }, { status: 404 });
     }

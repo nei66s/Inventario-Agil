@@ -37,7 +37,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="font-body antialiased">
+      <body className="font-body antialiased min-h-screen w-full overflow-x-hidden">
         {children}
         <Toaster />
       </body>

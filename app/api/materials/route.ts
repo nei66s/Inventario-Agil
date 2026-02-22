@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 
 export async function GET() {
   try {
-    const res = await pool.query(
+    const res = await getPool().query(
       `SELECT id, sku, name, description, unit, min_stock, reorder_point, setup_time_minutes, production_time_per_unit_minutes, color_options, metadata
        FROM materials ORDER BY id`
     )
@@ -59,20 +59,20 @@ export async function POST(request: Request) {
 
     // If sku provided, ensure uniqueness
     if (sku) {
-      const exists = await pool.query('SELECT id FROM materials WHERE sku=$1', [sku])
+      const exists = await getPool().query('SELECT id FROM materials WHERE sku=$1', [sku])
       if (exists.rowCount > 0) return NextResponse.json({ errors: { sku: 'SKU já em uso' } }, { status: 400 })
     }
 
     let res
     if (sku) {
-      res = await pool.query(
+      res = await getPool().query(
         `INSERT INTO materials (sku, name, description, unit, min_stock, reorder_point, setup_time_minutes, production_time_per_unit_minutes, color_options)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, sku, name, description, unit, min_stock, reorder_point, setup_time_minutes, production_time_per_unit_minutes, color_options`,
         [sku, name, payload.description || null, standardUom, minStock, reorderPoint, setupTimeMinutes, productionTimePerUnitMinutes, JSON.stringify(colorOptions || [])]
       )
     } else {
       // generate a SKU using the next id from the materials sequence so we can satisfy NOT NULL/UNIQUE
-      res = await pool.query(
+      res = await getPool().query(
         `WITH next_id AS (SELECT nextval(pg_get_serial_sequence('materials','id')) AS nid)
          INSERT INTO materials (id, sku, name, description, unit, min_stock, reorder_point, setup_time_minutes, production_time_per_unit_minutes, color_options)
          SELECT nid, ('MAT-' || lpad(nid::text, 3, '0'))::text, $1, $2, $3, $4, $5, $6, $7, $8 FROM next_id

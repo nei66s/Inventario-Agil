@@ -12,41 +12,47 @@
  * }
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { getAi } from '@/ai/genkit'
+import { z } from 'genkit'
 
 const SuggestOptimalStockLevelsInputSchema = z.object({
   materialId: z.string().describe('The ID of the material to suggest stock levels for.'),
-  historicalData: z.string().describe('Historical stock data in JSON format, including stock moves OUT and seasonality by period.'),
+  historicalData: z
+    .string()
+    .describe('Historical stock data in JSON format, including stock moves OUT and seasonality by period.'),
   leadTimeDays: z.number().describe('The lead time in days for the material.'),
   openOrdersQuantity: z.number().describe('The total quantity of the material in open orders.'),
-});
+})
 export type SuggestOptimalStockLevelsInput = z.infer<
   typeof SuggestOptimalStockLevelsInputSchema
->;
+>
 
 const SuggestOptimalStockLevelsOutputSchema = z.object({
   suggestedReorderPoint: z.number().describe('The suggested reorder point for the material.'),
   suggestedMinStock: z.number().describe('The suggested minimum stock level for the material.'),
-  suggestedQuantity: z
-    .number()
-    .describe('The suggested reorder quantity considering lead time and open orders.'),
-});
+  suggestedQuantity: z.number().describe('The suggested reorder quantity considering lead time and open orders.'),
+})
 export type SuggestOptimalStockLevelsOutput = z.infer<
   typeof SuggestOptimalStockLevelsOutputSchema
->;
+>
 
-export async function suggestOptimalStockLevels(
+type SuggestOptimalStockLevelsFlow = (
   input: SuggestOptimalStockLevelsInput
-): Promise<SuggestOptimalStockLevelsOutput> {
-  return suggestOptimalStockLevelsFlow(input);
-}
+) => Promise<SuggestOptimalStockLevelsOutput>
 
-const suggestOptimalStockLevelsPrompt = ai.definePrompt({
-  name: 'suggestOptimalStockLevelsPrompt',
-  input: {schema: SuggestOptimalStockLevelsInputSchema},
-  output: {schema: SuggestOptimalStockLevelsOutputSchema},
-  prompt: `You are an expert inventory management consultant.
+let suggestOptimalStockLevelsFlowInstance: SuggestOptimalStockLevelsFlow | null = null
+
+function getSuggestOptimalStockLevelsFlow(): SuggestOptimalStockLevelsFlow {
+  if (suggestOptimalStockLevelsFlowInstance) {
+    return suggestOptimalStockLevelsFlowInstance
+  }
+
+  const ai = getAi()
+  const suggestOptimalStockLevelsPrompt = ai.definePrompt({
+    name: 'suggestOptimalStockLevelsPrompt',
+    input: { schema: SuggestOptimalStockLevelsInputSchema },
+    output: { schema: SuggestOptimalStockLevelsOutputSchema },
+    prompt: `You are an expert inventory management consultant.
 
   Based on the historical stock data, lead time, and open orders, suggest optimal stock levels to minimize shortages and overstocking.
 
@@ -67,16 +73,26 @@ const suggestOptimalStockLevelsPrompt = ai.definePrompt({
   Format your response as a JSON object:
   {{json suggestedReorderPoint=number, suggestedMinStock=number, suggestedQuantity=number}}
   `,
-});
+  })
 
-const suggestOptimalStockLevelsFlow = ai.defineFlow(
-  {
-    name: 'suggestOptimalStockLevelsFlow',
-    inputSchema: SuggestOptimalStockLevelsInputSchema,
-    outputSchema: SuggestOptimalStockLevelsOutputSchema,
-  },
-  async input => {
-    const {output} = await suggestOptimalStockLevelsPrompt(input);
-    return output!;
-  }
-);
+  const flow = ai.defineFlow(
+    {
+      name: 'suggestOptimalStockLevelsFlow',
+      inputSchema: SuggestOptimalStockLevelsInputSchema,
+      outputSchema: SuggestOptimalStockLevelsOutputSchema,
+    },
+    async (input) => {
+      const { output } = await suggestOptimalStockLevelsPrompt(input)
+      return output!
+    }
+  )
+
+  suggestOptimalStockLevelsFlowInstance = flow as SuggestOptimalStockLevelsFlow
+  return suggestOptimalStockLevelsFlowInstance
+}
+
+export async function suggestOptimalStockLevels(
+  input: SuggestOptimalStockLevelsInput
+): Promise<SuggestOptimalStockLevelsOutput> {
+  return getSuggestOptimalStockLevelsFlow()(input)
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,19 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background px-4 py-12">
       <div className="w-full max-w-5xl">
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <Image
+            src="/black-tower-x-transp.png"
+            alt="Black Tower X"
+            width={160}
+            height={48}
+            className="h-12 w-auto object-contain"
+            priority
+          />
+          <p className="text-xs uppercase tracking-wide text-primary-foreground/80">
+            Black Tower X · SaaS personalizado com assinatura mensal
+          </p>
+        </div>
         <div className="grid gap-8 lg:grid-cols-[1.2fr_360px]">
           <section className="hero min-h-[420px] rounded-[32px] p-8 shadow-xl">
               <div className="hero-inner">
@@ -121,6 +135,9 @@ export default function LoginPage() {
             </CardContent>
           </Card>
         </div>
+        <p className="mt-6 text-center text-[10px] uppercase tracking-wide text-muted-foreground">
+          SupplyChain · Plataforma SaaS construída e mantida pela Black Tower X
+        </p>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
 function errorMessage(err: unknown): string {
@@ -10,7 +10,7 @@ function errorMessage(err: unknown): string {
 export async function GET(request: NextRequest) {
   try {
     await requireAuth(request)
-    const res = await pool.query(
+    const res = await getPool().query(
       `SELECT id, type, status, source_ref, created_at, posted_at, posted_by, auto_allocated
        FROM inventory_receipts
        ORDER BY created_at DESC`
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     }))
     if (receipts.length > 0) {
       const ids = receipts.map((r) => Number(String(r.id).replace(/^IR-/, ''))).filter((n) => !Number.isNaN(n))
-      const itemsRes = await pool.query(
+      const itemsRes = await getPool().query(
         `SELECT iri.receipt_id, iri.material_id, iri.qty, iri.uom, m.name AS material_name
          FROM inventory_receipt_items iri
          LEFT JOIN materials m ON m.id = iri.material_id

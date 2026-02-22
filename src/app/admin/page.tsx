@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,16 @@ type AccountRecord = { id: string; name: string; email: string; role: string };
 type ApiUsersList = { users: AccountRecord[]; message?: string };
 type ApiUserCreationResponse = { user: AccountRecord; message?: string };
 type ApiUserUpdateResponse = { user: AccountRecord; message?: string };
+type SiteSettingsPayload = {
+  companyName: string;
+  platformLabel: string;
+  logoUrl: string | null;
+  logoDataUrl: string | null;
+};
+type SiteSettingsForm = {
+  companyName: string;
+  logoUrl: string;
+};
 
 const roleOptions: Role[] = ['Admin', 'Manager', 'Seller', 'Input Operator', 'Production Operator', 'Picker'];
 
@@ -41,6 +52,17 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false);
   const [roleSelection, setRoleSelection] = useState<Record<string, Role>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [siteSettings, setSiteSettings] = useState<SiteSettingsPayload | null>(null);
+  const [siteSettingsLoading, setSiteSettingsLoading] = useState(true);
+  const [settingsForm, setSettingsForm] = useState<SiteSettingsForm>({
+    companyName: '',
+    logoUrl: '',
+  });
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [logoDataDirty, setLogoDataDirty] = useState(false);
+  const [logoFileName, setLogoFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     if (!authUser || authUser.role !== 'Admin') return;
@@ -70,6 +92,53 @@ export default function AdminPage() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    let active = true;
+    if (!authUser) {
+      setSiteSettingsLoading(false);
+      return;
+    }
+
+    setSiteSettingsLoading(true);
+
+    fetch('/api/site', { cache: 'no-store', credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Nao foi possivel carregar a marca');
+        }
+        return (await response.json()) as SiteSettingsPayload;
+      })
+      .then((payload) => {
+        if (!active) return;
+        setSiteSettings(payload);
+        setSettingsForm({
+          companyName: payload.companyName,
+          logoUrl: payload.logoUrl ?? '',
+        });
+        setLogoDataUrl(payload.logoDataUrl ?? null);
+        setLogoDataDirty(false);
+        setLogoFileName(payload.logoDataUrl ? 'Logo atual' : null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        console.error('site settings load error', error);
+        toast({
+          title: 'Erro ao carregar marca',
+          description: 'Verifique a conexao e tente novamente.',
+          variant: 'destructive',
+        });
+      })
+      .finally(() => {
+        if (active) {
+          setSiteSettingsLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authUser, toast]);
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -114,6 +183,81 @@ export default function AdminPage() {
     }
   };
 
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setLogoDataUrl(result);
+      setLogoDataDirty(true);
+      setLogoFileName(file.name);
+      setSettingsForm((prev) => ({ ...prev, logoUrl: '' }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSiteSettingsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authUser) return;
+
+    const nextCompanyName = settingsForm.companyName.trim();
+    if (!nextCompanyName) {
+      toast({
+        title: 'Nome vazio',
+        description: 'Informe o nome da empresa antes de salvar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingSettings(true);
+    const payload: Record<string, unknown> = {
+      companyName: nextCompanyName,
+      logoUrl: settingsForm.logoUrl.trim() || null,
+      platformLabel: 'Plataforma SaaS',
+    };
+    if (logoDataDirty) {
+      payload.logoDataUrl = logoDataUrl;
+    }
+
+    try {
+      const response = await fetch('/api/site', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Nao foi possivel atualizar a marca');
+      }
+      setSiteSettings(result);
+      setSettingsForm({
+        companyName: result.companyName,
+        logoUrl: result.logoUrl ?? '',
+      });
+      setLogoDataUrl(result.logoDataUrl ?? null);
+      setLogoDataDirty(false);
+      setLogoFileName(
+        result.logoDataUrl ? 'Logo atual' : result.logoUrl ? 'Logo por URL' : null
+      );
+      toast({
+        title: 'Marca atualizada',
+        description: 'Nome e logo personalizados foram salvos.',
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Verifique os dados e tente novamente.';
+      toast({
+        title: 'Erro ao atualizar marca',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const handleRoleUpdate = async (userId: string) => {
     if (!authUser) return;
     const nextRole = roleSelection[userId];
@@ -153,6 +297,13 @@ export default function AdminPage() {
     return [...users].sort((a, b) => a.email.localeCompare(b.email));
   }, [users]);
 
+  const trimmedPreviewName = settingsForm.companyName.trim();
+  const trimmedPreviewLogo = settingsForm.logoUrl.trim();
+  const previewName =
+    trimmedPreviewName || siteSettings?.companyName || 'Black Tower X';
+  const previewLogo =
+    logoDataUrl ?? trimmedPreviewLogo || siteSettings?.logoUrl || '/black-tower-x-transp.png';
+
   if (authLoading) {
     return (
       <Card>
@@ -179,6 +330,104 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Marca personalizada</CardTitle>
+          <CardDescription>
+            Defina o nome exibido aos operadores e um logo que represente a sua empresa.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form className="grid gap-4 lg:grid-cols-2" onSubmit={handleSiteSettingsSubmit}>
+            <div className="grid gap-2">
+              <Label htmlFor="site-company-name">Nome da empresa</Label>
+              <Input
+                id="site-company-name"
+                value={settingsForm.companyName}
+                onChange={(event) =>
+                  setSettingsForm((prev) => ({ ...prev, companyName: event.target.value }))
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="site-logo-url">URL do logo</Label>
+              <Input
+                id="site-logo-url"
+                placeholder="https://meusite.com/logo.png"
+                value={settingsForm.logoUrl}
+                onChange={(event) =>
+                  setSettingsForm((prev) => ({ ...prev, logoUrl: event.target.value }))
+                }
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="site-logo-file">Upload do logo</Label>
+              <input
+                ref={fileInputRef}
+                id="site-logo-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleLogoFileChange}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Selecionar arquivo
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {logoFileName ?? 'Nenhum arquivo selecionado'}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => {
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                  setLogoDataUrl(null);
+                  setLogoDataDirty(true);
+                  setLogoFileName(null);
+                }}
+                disabled={!logoFileName && !siteSettings?.logoDataUrl}
+              >
+                Limpar logo armazenado
+              </Button>
+            </div>
+            <div className="lg:col-span-2">
+              <Button type="submit" disabled={savingSettings}>
+                {savingSettings ? 'Salvando identidade...' : 'Salvar identidade'}
+              </Button>
+            </div>
+          </form>
+          <div className="rounded-2xl border border-border/70 bg-muted p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pré-visualização</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="relative h-12 w-12 rounded-lg border border-border/70 bg-card/50 p-2">
+                <Image
+                  src={previewLogo}
+                  alt="Preview do logo"
+                  fill
+                  sizes="48px"
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">{previewName}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Plataforma SaaS</p>
+                {siteSettingsLoading && (
+                  <p className="text-[11px] text-muted-foreground">Carregando marca...</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-headline">

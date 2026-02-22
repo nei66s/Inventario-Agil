@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { pool } from '@/lib/db';
+import { getPool } from '@/lib/db';
 import { signAuthToken, createAuthCookie } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Email e senha sao obrigatorios' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await getPool().query(
       'SELECT id, name, email, password_hash, role, avatar_url FROM users WHERE LOWER(email) = $1',
       [email]
     );

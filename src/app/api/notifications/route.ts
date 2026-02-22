@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
 function errorMessage(err: unknown): string {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url)
     const onlyUnread = url.searchParams.get('unread') === '1'
 
-    const res = await pool.query(
+    const res = await getPool().query(
       `SELECT id, type, title, message, created_at, read_at, role_target, order_id, material_id, dedupe_key
        FROM notifications
        ${onlyUnread ? 'WHERE read_at IS NULL' : ''}
@@ -44,7 +44,7 @@ export async function PATCH(request: NextRequest) {
     const id = Number(String(body.id ?? '').replace(/\D+/g, ''))
     if (!id) return NextResponse.json({ error: 'id invalido' }, { status: 400 })
     const read = Boolean(body.read)
-    await pool.query('UPDATE notifications SET read_at = $2 WHERE id = $1', [id, read ? new Date() : null])
+    await getPool().query('UPDATE notifications SET read_at = $2 WHERE id = $1', [id, read ? new Date() : null])
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })

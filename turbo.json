@@ -1,0 +1,23 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": [".next/**", "next_build/**"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "typecheck": {
+      "outputs": []
+    }
+  },
+  "globalDependencies": [
+    "package.json",
+    "turbo.json",
+    "tsconfig.json",
+    "next.config.ts",
+    "tailwind.config.ts",
+    "postcss.config.mjs",
+    "scripts/**"
+  ]
+}

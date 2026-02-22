@@ -263,7 +263,7 @@ export default function MaterialsPage() {
       }
       toast({ title: 'Material removido', description: 'Material excluído com sucesso', variant: 'success' });
       await fetchMaterials();
-    } catch (e) {
+    } catch {
       toast({ title: 'Erro', description: 'Erro ao remover material', variant: 'destructive' });
     }
   };

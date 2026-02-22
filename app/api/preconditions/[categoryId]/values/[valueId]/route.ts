@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 
 type Params = { params: { categoryId: string; valueId: string } }
 
@@ -12,7 +12,7 @@ export async function DELETE(_request: Request, context: any) {
       return NextResponse.json({ error: 'Parametros invalidos' }, { status: 400 });
     }
 
-    const deleted = await pool.query(
+    const deleted = await getPool().query(
       'DELETE FROM precondition_values WHERE id = $1 AND category_id = $2 RETURNING id',
       [valueId, categoryId]
     );

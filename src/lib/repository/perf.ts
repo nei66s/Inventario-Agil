@@ -1,4 +1,4 @@
-const perfEnabled = process.env.NODE_ENV !== 'production' || process.env.DEBUG_PERF === 'true'
+export const perfEnabled = process.env.NODE_ENV !== 'production' || process.env.DEBUG_PERF === 'true'
 
 export type RepoMetrics = { queryMs: number; serializationMs: number; totalMs: number; rows: number }
 

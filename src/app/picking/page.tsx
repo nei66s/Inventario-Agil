@@ -18,7 +18,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { generateLabelPdf } from '@/lib/domain/labels';
 import { readinessLabel, readinessTabLabel } from '@/lib/domain/i18n';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Order, User } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -26,33 +26,30 @@ import { EmptyState } from '@/components/ui/empty-state';
 export default function PickingPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const [filter, setFilter] = React.useState<'READY_FULL' | 'READY_PARTIAL' | 'ALL'>('ALL');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [ordersRes, usersRes] = await Promise.all([
-        fetch('/api/orders', { cache: 'no-store' }),
-        fetch('/api/users', { cache: 'no-store' }),
-      ]);
-      if (ordersRes.ok) {
-        const payload = await ordersRes.json();
-        setOrders(Array.isArray(payload) ? payload : []);
-      }
-      if (usersRes.ok) {
-        const payload = await usersRes.json();
-        setUsers(Array.isArray(payload) ? payload : []);
-      }
-    } finally {
-      setLoading(false);
+    const [ordersRes, usersRes] = await Promise.all([
+      fetch('/api/orders', { cache: 'no-store' }),
+      fetch('/api/users', { cache: 'no-store' }),
+    ]);
+    if (ordersRes.ok) {
+      const payload = await ordersRes.json();
+      setOrders(Array.isArray(payload) ? payload : []);
+    }
+    if (usersRes.ok) {
+      const payload = await usersRes.json();
+      setUsers(Array.isArray(payload) ? payload : []);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
+    const initialize = async () => {
+      await loadData();
+    };
+    void initialize();
   }, [loadData]);
 
   const queue = orders

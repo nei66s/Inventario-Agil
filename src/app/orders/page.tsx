@@ -427,14 +427,14 @@ export default function OrdersPage() {
   const selectedOrder = db.orders.find((item) => item.id === selectedOrderId) ?? null;
 
   React.useEffect(() => {
-    if (!selectedOrder) {
+    if (!selectedOrderId) {
       if (conditionPickerTarget) setConditionPickerTarget(null);
       return;
     }
-    if (conditionPickerTarget && conditionPickerTarget.orderId !== selectedOrder.id) {
+    if (conditionPickerTarget && conditionPickerTarget.orderId !== selectedOrderId) {
       setConditionPickerTarget(null);
     }
-  }, [selectedOrder?.id, conditionPickerTarget]);
+  }, [selectedOrderId, conditionPickerTarget]);
 
   const stockByMaterial = React.useMemo(() => {
     const map = new Map<string, { onHand: number; reservedTotal: number; productionReserved: number; available: number }>();

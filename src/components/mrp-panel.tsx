@@ -135,7 +135,6 @@ export default function MrpPanel() {
   const [dialogOrderId, setDialogOrderId] = React.useState('');
   const [dialogOrderNumber, setDialogOrderNumber] = React.useState<string | null>(null);
   const [dialogBusy, setDialogBusy] = React.useState(false);
-  const [creatingOrderDraft, setCreatingOrderDraft] = React.useState(false);
   const [dialogError, setDialogError] = React.useState<string | null>(null);
   const [mrpSuggestions, setMrpSuggestions] = React.useState<MrpSuggestion[]>([]);
   const [pendingSuggestion, setPendingSuggestion] = React.useState<SuggestionHeuristic | null>(null);
@@ -395,19 +394,6 @@ export default function MrpPanel() {
     return order;
   }
 
-  const handleDraftOrder = async () => {
-    setDialogError(null);
-    setCreatingOrderDraft(true);
-    try {
-      const order = await createDraftOrder();
-      setDialogOrderId(order.id);
-    } catch (err) {
-      setDialogError(errorMessage(err));
-    } finally {
-      setCreatingOrderDraft(false);
-    }
-  };
-
   const handleCreateProduction = async () => {
     if (!dialogMaterial) return;
     setDialogBusy(true);
@@ -645,7 +631,7 @@ export default function MrpPanel() {
             {dialogError ? <p className="text-sm text-destructive">{dialogError}</p> : null}
           </div>
           <DialogFooter className="justify-end gap-2">
-            <Button variant="outline" onClick={closeDialog} disabled={dialogBusy || creatingOrderDraft}>
+              <Button variant="outline" onClick={closeDialog} disabled={dialogBusy}>
               Cancelar
             </Button>
             <Button onClick={handleCreateProduction} disabled={dialogBusy}>

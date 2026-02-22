@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { postReceipt } from '@/lib/receipt-helpers'
 
@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const autoAllocate = Boolean(body.autoAllocate)
 
-    const client = await pool.connect()
+    const client = await getPool().connect()
     try {
       await client.query('BEGIN')
       await postReceipt(client, receiptId, {

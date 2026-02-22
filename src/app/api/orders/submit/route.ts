@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
 type ItemPayload = {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         // if still null, try lookup by sku or exact id string
         if (!materialIdNum) {
           try {
-            const r = await pool.query<MaterialLookupRow>('SELECT id FROM materials WHERE sku=$1 OR name=$1 LIMIT 1', [it.materialId])
+            const r = await getPool().query<MaterialLookupRow>('SELECT id FROM materials WHERE sku=$1 OR name=$1 LIMIT 1', [it.materialId])
             if (r.rowCount > 0) materialIdNum = Number(r.rows[0].id)
           } catch {}
         }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     let total = 0
     for (const it of items) total += Number(it.quantity) * Number(it.unitPrice ?? 0)
 
-    const client = await pool.connect()
+    const client = await getPool().connect()
     try {
       await client.query('BEGIN')
       const orderRes = await client.query(
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
       await client.query('COMMIT')
 
       // Fetch created order and items
-      const createdRes = await pool.query<CreatedOrderItemRow>(
+      const createdRes = await getPool().query<CreatedOrderItemRow>(
         `SELECT o.id, o.order_number, o.status, o.total, o.created_at, oi.id AS item_id, oi.material_id, oi.conditions, m.sku, m.name AS material_name, oi.quantity, oi.unit_price
          FROM orders o
          LEFT JOIN order_items oi ON oi.order_id = o.id

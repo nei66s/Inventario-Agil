@@ -18,12 +18,11 @@ import {
 import { EmptyState } from '@/components/ui/empty-state';
 import { formatDate } from '@/lib/utils';
 import { readinessLabel } from '@/lib/domain/i18n';
-import { Order, StockBalance, StockReservation, User } from '@/lib/domain/types';
+import { Order, StockBalance, User } from '@/lib/domain/types';
 
 export default function OrdersTrashPage() {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [stockBalances, setStockBalances] = React.useState<StockBalance[]>([]);
-  const [stockReservations, setStockReservations] = React.useState<StockReservation[]>([]);
   const [users, setUsers] = React.useState<User[]>([]);
 
   const loadData = React.useCallback(async () => {
@@ -36,11 +35,10 @@ export default function OrdersTrashPage() {
       const data = await ordersRes.json();
       setOrders(Array.isArray(data) ? data : []);
     }
-    if (inventoryRes.ok) {
-      const data = await inventoryRes.json();
-      setStockBalances(Array.isArray(data.stockBalances) ? data.stockBalances : []);
-      setStockReservations(Array.isArray(data.stockReservations) ? data.stockReservations : []);
-    }
+      if (inventoryRes.ok) {
+        const data = await inventoryRes.json();
+        setStockBalances(Array.isArray(data.stockBalances) ? data.stockBalances : []);
+      }
     if (usersRes.ok) {
       const data = await usersRes.json();
       setUsers(Array.isArray(data.users) ? data.users : []);

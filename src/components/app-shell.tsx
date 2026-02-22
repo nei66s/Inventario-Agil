@@ -27,7 +27,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -51,7 +50,6 @@ import PingHealth from './ping-health';
 import { Input } from './ui/input';
 import { roleLabel } from '@/lib/domain/i18n';
 import { useAuthUser } from '@/hooks/use-auth';
-import { DataRefreshIndicator } from './data-refresh-indicator';
 
 const navItems = [
   { href: '/dashboard', icon: AreaChart, label: 'Indicadores' },
@@ -76,7 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const headerIsHydrated = mounted;
   const userName = headerIsHydrated ? displayUser?.name ?? 'Usuario' : 'Usuario';
   const roleLabelText = headerIsHydrated ? displayRoleLabel : 'Carregando...';
-  const avatarSrc = headerIsHydrated ? displayUser?.avatarUrl ?? '/logo.png' : '/logo.png';
+  const avatarSrc = headerIsHydrated ? displayUser?.avatarUrl ?? '/black-tower-x-transp.png' : '/black-tower-x-transp.png';
   const avatarAlt = headerIsHydrated ? displayUser?.name ?? 'Usuario' : 'Usuario';
   const avatarInitial = headerIsHydrated ? displayUser?.name?.charAt(0)?.toUpperCase() ?? 'U' : 'U';
 
@@ -109,7 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider defaultOpen={false}>
-      <Sidebar className="w-72 text-sidebar-foreground shadow-sm">
+      <Sidebar className="text-sidebar-foreground shadow-sm lg:w-72">
         <SidebarHeader className="rounded-3xl border border-sidebar-border/70 bg-sidebar/95 p-4 text-sidebar-foreground">
           <Logo className="px-1 py-1" />
         </SidebarHeader>
@@ -210,8 +208,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Sidebar>
 
       <SidebarInset className="bg-background">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-card/95 px-5 shadow-sm">
-          <SidebarTrigger className="md:hidden" />
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-card/95 px-4 py-3 shadow-sm backdrop-blur-sm">
+          <SidebarTrigger className="lg:hidden" />
 
           <h1 className="text-lg font-semibold font-headline">
             {navItems.find((item) => pathname.startsWith(item.href))?.label ?? 'Inventário Ágil'}
@@ -228,7 +226,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <PingHealth />
             <DbHealth />
-            <DataRefreshIndicator />
           </div>
           {mounted ? (
             <Button
@@ -273,9 +270,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         </header>
 
-        <main className="page-enter flex-1 p-6 lg:p-10">
-          <div className="mx-auto min-h-[65vh] w-full max-w-6xl">
-            <div className="min-h-full rounded-[32px] border border-border bg-card p-6 shadow-xl text-card-foreground">
+        <main className="page-enter flex-1 px-4 py-5 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-6xl">
+            <div className="min-h-[65vh] rounded-[32px] border border-border bg-card p-4 shadow-xl text-card-foreground sm:p-6 lg:p-8">
               {children}
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
 const RESERVATION_TTL_MS = 5 * 60 * 1000
@@ -18,7 +18,7 @@ function parseOrderIdFromSourceRef(sourceRef?: string | null): number | null {
 }
 
 async function allocateToOrders(
-  client: typeof pool,
+  client: import('pg').Pool | import('pg').PoolClient,
   materialId: number,
   qtyAvailable: number,
   userId: string | null
@@ -102,7 +102,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const autoAllocate = Boolean(body.autoAllocate)
 
-    const client = await pool.connect()
+    const client = await getPool().connect()
     try {
       await client.query('BEGIN')
       const receiptRes = await client.query<{ status: string; type: string; source_ref: string | null }>(

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 
 type DbRow = {
   id: number
@@ -40,7 +40,7 @@ function errorMessage(err: unknown): string {
 
 export async function GET() {
   try {
-    const res = await pool.query<DbRow>(
+    const res = await getPool().query<DbRow>(
       `SELECT
          pt.id,
          pt.order_id,
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     if (Number.isNaN(qtyToProduce) || qtyToProduce <= 0) errors.qtyToProduce = 'qtyToProduce deve ser maior que zero'
     if (Object.keys(errors).length > 0) return NextResponse.json({ errors }, { status: 400 })
 
-    const orderStatusRes = await pool.query<{ status: string; source: string }>('SELECT status, source FROM orders WHERE id = $1', [orderId])
+    const orderStatusRes = await getPool().query<{ status: string; source: string }>('SELECT status, source FROM orders WHERE id = $1', [orderId])
     if (orderStatusRes.rowCount === 0) return NextResponse.json({ error: 'order not found' }, { status: 400 })
     const os = String(orderStatusRes.rows[0]?.status ?? '').toUpperCase()
     const orderSource = String(orderStatusRes.rows[0]?.source ?? '').toLowerCase()
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Cannot create production task for draft order' }, { status: 403 })
     }
 
-    const res = await pool.query<DbRow>(
+    const res = await getPool().query<DbRow>(
       `INSERT INTO production_tasks (order_id, material_id, qty_to_produce, status)
        VALUES ($1, $2, $3, 'PENDING')
        ON CONFLICT (order_id, material_id)
@@ -125,16 +125,16 @@ export async function POST(request: Request) {
     try {
       const resultingQty = Number(res.rows[0].qty_to_produce ?? 0)
       if (orderSource === 'mrp') {
-        const matRes = await pool.query<{ description: string | null }>('SELECT description FROM materials WHERE id = $1', [materialId])
+        const matRes = await getPool().query<{ description: string | null }>('SELECT description FROM materials WHERE id = $1', [materialId])
         const materialDescription = matRes.rows[0]?.description ?? null
-        const existing = await pool.query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [orderId, materialId])
+        const existing = await getPool().query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [orderId, materialId])
         if (existing.rowCount > 0) {
-          await pool.query(
+          await getPool().query(
             'UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description) WHERE order_id = $1 AND material_id = $2',
             [orderId, materialId, resultingQty, materialDescription]
           )
         } else {
-          await pool.query(
+          await getPool().query(
             `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description)
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [orderId, materialId, resultingQty, 0, '', 'PRODUCE', materialDescription]
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
     // Also create/update a production reservation tied to this order/material
     try {
       if (Number(res.rows[0].qty_to_produce ?? 0) > 0) {
-        await pool.query(
+        await getPool().query(
           `INSERT INTO production_reservations (order_id, material_id, qty, created_at, updated_at)
            VALUES ($1, $2, $3, now(), now())
            ON CONFLICT (order_id, material_id) DO UPDATE SET qty = EXCLUDED.qty, updated_at = now()`,
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
         )
       } else {
         // If qty is zero, ensure no lingering reservation remains
-        await pool.query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [orderId, materialId])
+        await getPool().query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [orderId, materialId])
       }
     } catch (e) {
       // don't fail the whole request for reservation write issues; log and continue

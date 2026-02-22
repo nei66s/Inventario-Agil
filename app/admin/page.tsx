@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,12 @@ export default function AdminPage() {
   const [creating, setCreating] = useState(false);
   const [roleSelection, setRoleSelection] = useState<Record<string, Role>>({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState('');
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
+  const [logoFileName, setLogoFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [loadingBranding, setLoadingBranding] = useState(true);
 
   const fetchUsers = useCallback(async () => {
     if (!authUser || authUser.role !== 'Admin') return;
@@ -70,6 +77,104 @@ export default function AdminPage() {
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/site', { cache: 'no-store', credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error('Nao foi possivel carregar a marca');
+        }
+        return (await response.json()) as { companyName: string; logoDataUrl: string | null };
+      })
+      .then((payload) => {
+        if (!active) return;
+        setCompanyName(payload.companyName || 'Black Tower X');
+        setLogoDataUrl(payload.logoDataUrl);
+        setLogoFileName(payload.logoDataUrl ? 'Logo salvo' : null);
+        setLoadingBranding(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setCompanyName((prev) => prev || 'Black Tower X');
+        setLoadingBranding(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setLogoDataUrl(result);
+      setLogoFileName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSiteSettingsSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!authUser) return;
+
+    const nextCompanyName = companyName.trim();
+    if (!nextCompanyName) {
+      toast({
+        title: 'Nome vazio',
+        description: 'Informe o nome da empresa antes de salvar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!logoDataUrl) {
+      toast({
+        title: 'Logo necessário',
+        description: 'Faça upload do logo para salvar a identidade.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingSettings(true);
+    const payload: Record<string, unknown> = {
+      companyName: nextCompanyName,
+      platformLabel: 'Plataforma SaaS',
+      logoDataUrl,
+    };
+
+    try {
+      const response = await fetch('/api/site', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? 'Nao foi possivel atualizar a marca');
+      }
+      setCompanyName(result.companyName);
+      setLogoDataUrl(result.logoDataUrl ?? null);
+      setLogoFileName(result.logoDataUrl ? 'Logo enviado' : null);
+      toast({
+        title: 'Marca atualizada',
+        description: 'Nome e logo personalizados foram salvos.',
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Verifique os dados e tente novamente.';
+      toast({
+        title: 'Erro ao atualizar marca',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -153,6 +258,9 @@ export default function AdminPage() {
     return [...users].sort((a, b) => a.email.localeCompare(b.email));
   }, [users]);
 
+  const previewLogo = logoDataUrl ?? '/black-tower-x-transp.png';
+  const previewCompanyName = loadingBranding ? 'Carregando...' : companyName || 'Black Tower X';
+
   if (authLoading) {
     return (
       <Card>
@@ -179,6 +287,86 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Marca personalizada</CardTitle>
+          <CardDescription>
+            Defina o nome exibido aos operadores e um logo atualizado somente via upload.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form className="grid gap-4 lg:grid-cols-2" onSubmit={handleSiteSettingsSubmit}>
+            <div className="grid gap-2">
+              <Label htmlFor="site-company-name">Nome da empresa</Label>
+              <Input
+                id="site-company-name"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="site-logo-file">Upload do logo</Label>
+              <input
+                ref={fileInputRef}
+                id="site-logo-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleLogoFileChange}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Selecionar arquivo
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {logoFileName ?? 'Nenhum arquivo selecionado'}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                onClick={() => {
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                  setLogoDataUrl(null);
+                  setLogoFileName(null);
+                }}
+              >
+                Limpar logo
+              </Button>
+            </div>
+            <div className="lg:col-span-2">
+              <Button type="submit" disabled={savingSettings}>
+                {savingSettings ? 'Salvando identidade...' : 'Salvar identidade'}
+              </Button>
+            </div>
+          </form>
+          <div className="rounded-2xl border border-border/70 bg-muted p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pré-visualização</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="relative h-12 w-12 rounded-lg border border-border/70 bg-card/50 p-2">
+                <Image
+                  src={previewLogo}
+                  alt="Preview do logo"
+                  fill
+                  sizes="48px"
+                  className="object-contain"
+                  unoptimized
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">{companyName}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Plataforma SaaS</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-headline">

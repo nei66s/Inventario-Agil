@@ -66,17 +66,17 @@ const parseBucketToDate = (label?: string | number) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+const SEPARATION_STATUSES = new Set(['ABERTO', 'EM_PICKING', 'SAIDA_CONCLUIDA']);
+
 const isFinalizedStatus = (status?: string | null) => status === 'FINALIZADO' || status === 'SAIDA_CONCLUIDA';
-const isInSeparationStatus = (status?: string | null) => status === 'EM_PICKING';
+const isInSeparationStatus = (status?: string | null) => (status ? SEPARATION_STATUSES.has(status) : false);
 
 const createDashboardFingerprint = (snapshot: DashboardData) => JSON.stringify(snapshot);
 
 export default function DashboardClient({ data }: DashboardClientProps) {
   const router = useRouter();
-  const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<'month' | 'all'>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData>(data);
   const dashboardFingerprintRef = useRef(createDashboardFingerprint(data));
 
@@ -213,33 +213,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   const monthFmt = useMemo(() => new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }), []);
 
 
-  const filteredRecentOrders = useMemo(() => {
-    if (!search) return recentOrders;
-    const query = search.toLowerCase();
-    return recentOrders.filter(
-      (order) =>
-        (order.orderNumber || '').toLowerCase().includes(query) ||
-        (order.clientName || '').toLowerCase().includes(query)
-    );
-  }, [recentOrders, search]);
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      if (order.trashedAt) return false;
-      const isFinalized = order.status === 'FINALIZADO' || order.status === 'SAIDA_CONCLUIDA';
-      return !isFinalized;
-    });
-  }, [orders]);
-
-  useEffect(() => {
-    if (!filteredOrders.length) {
-      setSelectedOrderId(null);
-      return;
-    }
-    if (!selectedOrderId || !filteredOrders.find((order) => order.id === selectedOrderId)) {
-      setSelectedOrderId(filteredOrders[0]?.id ?? null);
-    }
-  }, [filteredOrders, selectedOrderId]);
+  const filteredRecentOrders = recentOrders;
 
   const fetchDashboardUpdates = useCallback(async () => {
     try {
@@ -262,30 +236,8 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     return () => window.clearInterval(id);
   }, [fetchDashboardUpdates]);
 
-  const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
-
-  const stockByMaterial = useMemo(() => {
-    const map = new Map<string, { onHand: number; reservedTotal: number; available: number }>();
-    dashboardData.stockBalances.forEach((balance) => {
-      map.set(balance.materialId, {
-        onHand: balance.onHand,
-        reservedTotal: balance.reservedTotal,
-        available: Math.max(0, balance.onHand - balance.reservedTotal),
-      });
-    });
-    return map;
-  }, [dashboardData.stockBalances]);
-
-  const producingSet = useMemo(
-    () => new Set(productionTasks.filter((task) => task.status !== 'DONE').map((task) => task.orderId)),
-    [productionTasks]
-  );
-
   const finishedCount = orders.filter((order) => isFinalizedStatus(order.status)).length;
   const ordersInSeparation = orders.filter((order) => isInSeparationStatus(order.status)).length;
-  const bothSeparatedAndProducing = orders.filter(
-    (order) => isInSeparationStatus(order.status) && producingSet.has(order.id)
-  ).length;
   const heroStats = [
     { label: 'Pedidos abertos', value: openOrders },
     { label: 'Pedidos finalizados', value: finishedCount },
@@ -297,7 +249,6 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     const buckets: string[] = [];
     if (period === 'month') {
       const [year, month] = selectedMonth.split('-').map(Number);
-      const first = new Date(year, month - 1, 1);
       const last = new Date(year, month, 0);
       for (let day = 1; day <= last.getDate(); day++) {
         const entry = new Date(year, month - 1, day).toISOString().slice(0, 10);
@@ -344,18 +295,6 @@ export default function DashboardClient({ data }: DashboardClientProps) {
         <div>
           <h1 className="text-2xl font-bold">Indicadores</h1>
           <p className="text-sm text-muted-foreground">Última atualização: {formatDate(new Date().toISOString())}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            aria-label="Pesquisar pedidos"
-            placeholder="Pesquisar pedidos (número ou cliente)..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="max-w-xs"
-          />
-          <Button onClick={() => router.push('/orders/new')} aria-label="Novo pedido">
-            <Plus className="mr-2 h-4 w-4" />Novo pedido
-          </Button>
         </div>
       </div>
 
@@ -442,13 +381,6 @@ export default function DashboardClient({ data }: DashboardClientProps) {
               icon={AlertTriangle}
               tone="warning"
               onClick={() => router.push('/notifications')}
-            />
-            <KpiCard
-              title="Pedidos com sep+prod"
-              value={bothSeparatedAndProducing}
-              icon={ShieldAlert}
-              unit="un"
-              onClick={() => router.push('/orders?filter=sep_and_prod')}
             />
           </div>
         </section>

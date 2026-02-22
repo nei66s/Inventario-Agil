@@ -63,12 +63,13 @@ const parseBucketToDate = (label?: string | number) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+const SEPARATION_STATUSES = new Set(['ABERTO', 'EM_PICKING', 'SAIDA_CONCLUIDA']);
+
 const isFinalizedStatus = (status?: string | null) => status === 'FINALIZADO' || status === 'SAIDA_CONCLUIDA';
-const isInSeparationStatus = (status?: string | null) => status === 'EM_PICKING';
+const isInSeparationStatus = (status?: string | null) => (status ? SEPARATION_STATUSES.has(status) : false);
 
 export default function DashboardClient({ data }: DashboardClientProps) {
   const router = useRouter();
-  const [search, setSearch] = useState('');
   const [period, setPeriod] = useState<'month' | 'all'>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -180,15 +181,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   const monthFmt = useMemo(() => new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }), []);
 
 
-  const filteredRecentOrders = useMemo(() => {
-    if (!search) return recentOrders;
-    const query = search.toLowerCase();
-    return recentOrders.filter(
-      (order) =>
-        (order.orderNumber || '').toLowerCase().includes(query) ||
-        (order.clientName || '').toLowerCase().includes(query)
-    );
-  }, [recentOrders, search]);
+  const filteredRecentOrders = recentOrders;
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -236,10 +229,6 @@ export default function DashboardClient({ data }: DashboardClientProps) {
 
   const finishedCount = orders.filter((order) => isFinalizedStatus(order.status)).length;
   const ordersInSeparation = orders.filter((order) => isInSeparationStatus(order.status)).length;
-  const bothSeparatedAndProducing = orders.filter(
-    (order) => isInSeparationStatus(order.status) && producingSet.has(order.id)
-  ).length;
-
   const ordersComparisonSeries = useMemo(() => {
     const buckets: string[] = [];
     if (period === 'month') {
@@ -292,18 +281,6 @@ export default function DashboardClient({ data }: DashboardClientProps) {
           <h1 className="text-2xl font-bold">Indicadores</h1>
           <p className="text-sm text-muted-foreground">Última atualização: {formatDate(new Date().toISOString())}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Input
-            aria-label="Pesquisar pedidos"
-            placeholder="Pesquisar pedidos (número ou cliente)..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="max-w-xs"
-          />
-          <Button onClick={() => router.push('/orders/new')} aria-label="Novo pedido">
-            <Plus className="mr-2 h-4 w-4" />Novo pedido
-          </Button>
-        </div>
       </div>
 
       <div className="space-y-6">
@@ -354,17 +331,10 @@ export default function DashboardClient({ data }: DashboardClientProps) {
               tone="warning"
               onClick={() => router.push('/notifications')}
             />
-            <KpiCard
-              title="Pedidos com sep+prod"
-              value={bothSeparatedAndProducing}
-              icon={ShieldAlert}
-              unit="un"
-              onClick={() => router.push('/orders?filter=sep_and_prod')}
-            />
           </div>
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
@@ -527,7 +497,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Distribuição por status</CardTitle>
@@ -602,7 +572,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>{dashboardLabels.sellersTitle}</CardTitle>

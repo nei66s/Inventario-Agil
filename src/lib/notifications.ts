@@ -1,5 +1,5 @@
 import { Pool, PoolClient } from 'pg'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { NotificationType, Role } from '@/lib/domain/types'
 
 export type NotificationDraft = {
@@ -14,7 +14,7 @@ export type NotificationDraft = {
 }
 
 async function execQuery(query: string, params: unknown[], executor?: Pool | PoolClient) {
-  const client = executor ?? pool
+  const client = executor ?? getPool()
   await client.query(query, params)
 }
 
@@ -29,7 +29,7 @@ export async function publishNotification(draft: NotificationDraft, executor?: P
     draft.materialId ?? null,
   ]
   if (draft.dedupeKey) {
-    const client = executor ?? pool
+    const client = executor ?? getPool()
 
     const updateQuery = `
       UPDATE notifications SET

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 
 type RouteParams = { id: string }
@@ -19,7 +19,7 @@ function errorMessage(err: unknown): string {
   return String(err)
 }
 
-async function resolveMaterialId(client: typeof pool, value: string | number): Promise<number | null> {
+async function resolveMaterialId(client: import('pg').Pool | import('pg').PoolClient, value: string | number): Promise<number | null> {
   if (typeof value === 'number') return Number(value)
   const raw = String(value).trim()
   if (!raw) return null
@@ -33,7 +33,7 @@ async function resolveMaterialId(client: typeof pool, value: string | number): P
 }
 
 async function upsertReservation(
-  client: typeof pool,
+  client: import('pg').Pool | import('pg').PoolClient,
   orderId: number,
   materialId: number,
   userId: string | null,
@@ -54,7 +54,7 @@ async function upsertReservation(
 }
 
 async function updateProductionTask(
-  client: typeof pool,
+  client: import('pg').Pool | import('pg').PoolClient,
   orderId: number,
   materialId: number,
   qtyToProduce: number
@@ -82,7 +82,7 @@ async function updateProductionTask(
 }
 
 async function recalcReservationForItem(
-  client: typeof pool,
+  client: import('pg').Pool | import('pg').PoolClient,
   orderId: number,
   itemId: number,
   userId: string | null
@@ -153,7 +153,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json().catch(() => ({}))
     const action = String(body.action ?? '').toLowerCase()
 
-    const client = await pool.connect()
+    const client = await getPool().connect()
     try {
       await client.query('BEGIN')
 
@@ -461,8 +461,8 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const orderId = parseOrderId(resolvedParams.id)
     if (Number.isNaN(orderId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
 
-    await pool.query('DELETE FROM order_items WHERE order_id = $1', [orderId])
-    await pool.query('DELETE FROM orders WHERE id = $1', [orderId])
+    await getPool().query('DELETE FROM order_items WHERE order_id = $1', [orderId])
+    await getPool().query('DELETE FROM orders WHERE id = $1', [orderId])
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {

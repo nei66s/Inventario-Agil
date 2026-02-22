@@ -1,7 +1,7 @@
 import { unstable_cache } from 'next/cache'
 import { query } from '../db'
-import { getJsonCache, setJsonCache } from '../cache'
-import { logRepoPerf } from './perf'
+import { getJsonCache, invalidateCache, setJsonCache } from '../cache'
+import { logRepoPerf, perfEnabled } from './perf'
 import {
   InventoryReceipt,
   Material,
@@ -135,23 +135,25 @@ type StockReservationRow = {
   created_at: string
 }
 
-type InventoryReceiptRow = {
+type InventoryReceiptItemSnapshot = {
+  material_id: number | null
+  material_name: string | null
+  qty: string | number | null
+  uom: string | null
+}
+
+type InventoryReceiptSnapshotRow = {
   id: number
-  type: string
-  status: string
+  type: InventoryReceipt['type']
+  status: InventoryReceipt['status']
   source_ref: string | null
   created_at: string
   posted_at: string | null
   posted_by: string | null
   auto_allocated: boolean | null
-}
-
-type InventoryReceiptItemRow = {
-  receipt_id: number
-  material_id: number
-  qty: string | number
-  uom: string | null
-  material_name: string | null
+  items: InventoryReceiptItemSnapshot[] | null
+  item_count: number
+  total_qty: string | number | null
 }
 
 type NotificationRow = {
@@ -178,17 +180,28 @@ export type DashboardData = {
   notifications: Notification[]
 }
 
+type QueryProfileEntry = {
+  label: string
+  queryMs: number
+  rows: number
+}
+
+type LoadResult<T> = T & {
+  queryMs: number
+  queryProfile: QueryProfileEntry[]
+}
+
 const DASHBOARD_CACHE_KEY = 'dashboard:snapshot'
-const DASHBOARD_CACHE_TTL_SECONDS = 45
 const MATERIALIZED_VIEW_REFRESH_INTERVAL_MS = 15_000
 const MATERIALIZED_VIEWS = [
   'dashboard_orders_view',
   'dashboard_production_tasks_view',
   'dashboard_materials_stock_view',
+  'mv_inventory_receipts_snapshot',
 ]
 let bypassRedisCache = false
 
-async function loadOrders(): Promise<{ items: Order[]; queryMs: number }> {
+async function loadOrders(): Promise<LoadResult<{ items: Order[] }>> {
   const res = await query<OrderRow>(`
     SELECT *
     FROM dashboard_orders_view
@@ -266,10 +279,14 @@ async function loadOrders(): Promise<{ items: Order[]; queryMs: number }> {
     order.readiness = computeReadiness(order.items)
   })
 
-  return { items: orders, queryMs: res.queryTimeMs }
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'dashboard_orders_view', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { items: orders, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadProductionTasks(): Promise<{ items: ProductionTask[]; queryMs: number }> {
+async function loadProductionTasks(): Promise<LoadResult<{ items: ProductionTask[] }>> {
   const res = await query<ProductionTaskRow>(
     `SELECT *
      FROM dashboard_production_tasks_view
@@ -288,10 +305,16 @@ async function loadProductionTasks(): Promise<{ items: ProductionTask[]; queryMs
     updatedAt: row.updated_at,
   }))
 
-  return { items, queryMs: res.queryTimeMs }
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'dashboard_production_tasks_view', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { items, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadMaterialsWithStock(): Promise<{ materials: Material[]; stockBalances: StockBalance[]; queryMs: number }> {
+async function loadMaterialsWithStock(): Promise<
+  LoadResult<{ materials: Material[]; stockBalances: StockBalance[] }>
+> {
   const res = await query<MaterialStockRow>(`
     SELECT *
     FROM dashboard_materials_stock_view
@@ -328,10 +351,14 @@ async function loadMaterialsWithStock(): Promise<{ materials: Material[]; stockB
     productionReserved: Number((row as any).production_reserved ?? 0),
   }))
 
-  return { materials, stockBalances, queryMs: res.queryTimeMs }
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'dashboard_materials_stock_view', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { materials, stockBalances, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadUsers(): Promise<{ items: User[]; queryMs: number }> {
+async function loadUsers(): Promise<LoadResult<{ items: User[] }>> {
   const res = await query<UserRow>(`
     SELECT id, name, email, role, avatar_url
     FROM users
@@ -346,10 +373,14 @@ async function loadUsers(): Promise<{ items: User[]; queryMs: number }> {
     avatarUrl: row.avatar_url ?? undefined,
   }))
 
-  return { items: users, queryMs: res.queryTimeMs }
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'users', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { items: users, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadStockReservations(): Promise<{ items: StockReservation[]; queryMs: number }> {
+async function loadStockReservations(): Promise<LoadResult<{ items: StockReservation[] }>> {
   const res = await query<StockReservationRow>(`
     SELECT
       sr.id,
@@ -379,57 +410,50 @@ async function loadStockReservations(): Promise<{ items: StockReservation[]; que
     createdAt: row.created_at,
   }))
 
-  return { items, queryMs: res.queryTimeMs }
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'stock_reservations_active', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { items, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadInventoryReceipts(): Promise<{ items: InventoryReceipt[]; queryMs: number }> {
-  const res = await query<InventoryReceiptRow>(`
-    SELECT id, type, status, source_ref, created_at, posted_at, posted_by, auto_allocated
-    FROM inventory_receipts
+async function loadInventoryReceipts(): Promise<LoadResult<{ items: InventoryReceipt[] }>> {
+  const res = await query<InventoryReceiptSnapshotRow>(`
+    SELECT *
+    FROM mv_inventory_receipts_snapshot
     ORDER BY created_at DESC
   `)
-  const receipts = res.rows.map((row) => ({
-    id: `IR-${row.id}`,
-    type: row.type as InventoryReceipt['type'],
-    status: row.status as InventoryReceipt['status'],
-    items: [] as InventoryReceipt['items'],
-    sourceRef: row.source_ref ?? '',
-    createdAt: row.created_at,
-    postedAt: row.posted_at ?? undefined,
-    postedBy: row.posted_by ?? undefined,
-    autoAllocated: Boolean(row.auto_allocated),
-  }))
 
-  if (receipts.length > 0) {
-    const ids = receipts.map((r) => Number(String(r.id).replace(/^IR-/, ''))).filter((n) => !Number.isNaN(n))
-    const itemsRes = await query<InventoryReceiptItemRow>(
-      `SELECT iri.receipt_id, iri.material_id, iri.qty, iri.uom, m.name AS material_name
-       FROM inventory_receipt_items iri
-       LEFT JOIN materials m ON m.id = iri.material_id
-       WHERE iri.receipt_id = ANY($1::int[])`,
-      [ids]
-    )
-    const map = new Map<number, InventoryReceipt['items']>()
-    for (const row of itemsRes.rows) {
-      const list = map.get(row.receipt_id) ?? ([] as InventoryReceipt['items'])
-      list.push({
-        materialId: `M-${row.material_id}`,
-        materialName: row.material_name ?? `M-${row.material_id}`,
-        qty: Number(row.qty ?? 0),
-        uom: row.uom ?? 'EA',
-      })
-      map.set(row.receipt_id, list)
-    }
-    for (const receipt of receipts) {
-      const rid = Number(String(receipt.id).replace(/^IR-/, ''))
-      receipt.items = map.get(rid) ?? ([] as InventoryReceipt['items'])
-    }
-  }
+  const receipts = res.rows.map((row) => {
+    const parsedItems = parseJson<InventoryReceiptItemSnapshot[]>(row.items, [])
+    const items: InventoryReceipt['items'] = parsedItems.map((item) => ({
+      materialId: item.material_id ? `M-${item.material_id}` : '',
+      materialName: item.material_name ?? '',
+      qty: Number(item.qty ?? 0),
+      uom: item.uom ?? 'EA',
+    }))
 
-  return { items: receipts, queryMs: res.queryTimeMs }
+    return {
+      id: `IR-${row.id}`,
+      type: row.type,
+      status: row.status,
+      items,
+      sourceRef: row.source_ref ?? '',
+      createdAt: row.created_at,
+      postedAt: row.posted_at ?? undefined,
+      postedBy: row.posted_by ?? undefined,
+      autoAllocated: Boolean(row.auto_allocated),
+    }
+  })
+
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'mv_inventory_receipts_snapshot', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { items: receipts, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadNotifications(): Promise<{ items: Notification[]; queryMs: number }> {
+async function loadNotifications(): Promise<LoadResult<{ items: Notification[] }>> {
   const res = await query<NotificationRow>(`
     SELECT id, type, title, message, created_at, read_at, role_target, order_id, material_id, dedupe_key
     FROM notifications
@@ -447,7 +471,11 @@ async function loadNotifications(): Promise<{ items: Notification[]; queryMs: nu
     materialId: row.material_id ? `M-${row.material_id}` : undefined,
     dedupeKey: row.dedupe_key ?? undefined,
   }))
-  return { items, queryMs: res.queryTimeMs }
+  const queryProfile: QueryProfileEntry[] = [
+    { label: 'notifications_recent', queryMs: res.queryTimeMs, rows: res.rowCount ?? 0 },
+  ]
+
+  return { items, queryMs: res.queryTimeMs, queryProfile }
 }
 
 async function createDashboardSnapshotInternal(): Promise<DashboardData> {
@@ -461,6 +489,17 @@ async function createDashboardSnapshotInternal(): Promise<DashboardData> {
     loadInventoryReceipts(),
     loadNotifications(),
   ])
+
+  const segmentResults = [
+    ordersResult,
+    tasksResult,
+    materialsResult,
+    usersResult,
+    reservationsResult,
+    receiptsResult,
+    notificationsResult,
+  ]
+  const combinedQueryProfiles = segmentResults.flatMap((result) => result.queryProfile)
 
   const serializationStart = process.hrtime.bigint()
   const dashboardData: DashboardData = {
@@ -476,14 +515,31 @@ async function createDashboardSnapshotInternal(): Promise<DashboardData> {
   const serializationMs = Number(process.hrtime.bigint() - serializationStart) / 1_000_000
 
   const totalMs = Number(process.hrtime.bigint() - totalStart) / 1_000_000
+  logDashboardSnapshotQueryProfile(combinedQueryProfiles, totalMs)
   logRepoPerf('repo:dashboardSnapshot', {
-    queryMs: ordersResult.queryMs + tasksResult.queryMs + materialsResult.queryMs + usersResult.queryMs + reservationsResult.queryMs + receiptsResult.queryMs + notificationsResult.queryMs,
+    queryMs: segmentResults.reduce((sum, result) => sum + result.queryMs, 0),
     serializationMs,
     totalMs,
     rows: dashboardData.orders.length + dashboardData.productionTasks.length,
   })
 
   return dashboardData
+}
+
+function logDashboardSnapshotQueryProfile(queryProfiles: QueryProfileEntry[], totalMs: number) {
+  if (!perfEnabled || queryProfiles.length === 0) {
+    return
+  }
+
+  const detail = queryProfiles
+    .map((profile) => `${profile.label}=${profile.queryMs.toFixed(2)}ms rows=${profile.rows}`)
+    .join(' | ')
+  const slowest = queryProfiles.reduce((prev, current) => (current.queryMs > prev.queryMs ? current : prev), queryProfiles[0])
+
+  console.debug(`[perf][repo:dashboardSnapshot:queries] totalMs=${totalMs.toFixed(2)}ms ${detail}`)
+  console.debug(
+    `[perf][repo:dashboardSnapshot:slowest] ${slowest.label}=${slowest.queryMs.toFixed(2)}ms rows=${slowest.rows}`
+  )
 }
 
 // Keep dashboard data fresh-ish (~15s) while reusing the cached snapshot and Redis fallback.
@@ -495,7 +551,7 @@ async function loadDashboardSnapshot(): Promise<DashboardData> {
     if (cached) return cached
   }
   const snapshot = await createDashboardSnapshotInternal()
-  await setJsonCache(DASHBOARD_CACHE_KEY, snapshot, DASHBOARD_CACHE_TTL_SECONDS)
+  await setJsonCache(DASHBOARD_CACHE_KEY, snapshot)
   return snapshot
 }
 
@@ -505,12 +561,20 @@ export const getDashboardSnapshot = unstable_cache(
   { revalidate: 15 }
 )
 
+export async function invalidateDashboardCache() {
+  await invalidateCache(DASHBOARD_CACHE_KEY)
+}
+
 let pendingMaterializedRefresh: Promise<void> | null = null
 let lastMaterializedRefreshAt = 0
 
 async function refreshMaterializedViews(): Promise<void> {
   for (const view of MATERIALIZED_VIEWS) {
-    await query(`REFRESH MATERIALIZED VIEW ${view}`)
+    const refreshSql =
+      view === 'mv_inventory_receipts_snapshot'
+        ? `REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`
+        : `REFRESH MATERIALIZED VIEW ${view}`
+    await query(refreshSql)
   }
 }
 

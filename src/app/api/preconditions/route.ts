@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 
 type PreconditionRow = {
   id: number
@@ -9,7 +9,7 @@ type PreconditionRow = {
 
 export async function GET() {
   try {
-    const result = await pool.query<PreconditionRow>(
+    const result = await getPool().query<PreconditionRow>(
       `SELECT
          c.id,
          c.name,
@@ -45,12 +45,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Nome da categoria e obrigatorio' }, { status: 400 })
     }
 
-    const existing = await pool.query('SELECT id FROM precondition_categories WHERE lower(name) = lower($1)', [name])
+    const existing = await getPool().query('SELECT id FROM precondition_categories WHERE lower(name) = lower($1)', [name])
     if (existing.rowCount > 0) {
       return NextResponse.json({ error: 'Categoria ja existe' }, { status: 400 })
     }
 
-    const res = await pool.query(
+    const res = await getPool().query(
       'INSERT INTO precondition_categories (name) VALUES ($1) RETURNING id, name',
       [name]
     )

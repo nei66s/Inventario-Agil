@@ -16,11 +16,6 @@ type Props = {
   stoppedInProduction?: number;
 };
 
-function pct(part: number, total: number) {
-  if (total === 0) return '0%';
-  return `${Math.round((part / total) * 100)}%`;
-}
-
 export const ProcessFlow: React.FC<Props> = ({
   ordersCount,
   separatedOnly,

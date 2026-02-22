@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 import { notifyProductionTaskCreated } from '@/lib/notifications'
 
 type DbRow = {
@@ -41,7 +41,7 @@ function errorMessage(err: unknown): string {
 
 export async function GET() {
   try {
-    const res = await pool.query(
+    const res = await getPool().query(
       `SELECT
          pt.id,
          pt.order_id,
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     if (Number.isNaN(qtyToProduce) || qtyToProduce <= 0) errors.qtyToProduce = 'qtyToProduce deve ser maior que zero'
     if (Object.keys(errors).length > 0) return NextResponse.json({ errors }, { status: 400 })
 
-    const res = await pool.query(
+    const res = await getPool().query(
        `INSERT INTO production_tasks (order_id, material_id, qty_to_produce, status)
        VALUES ($1, $2, $3, 'PENDING')
        ON CONFLICT (order_id, material_id)
@@ -112,18 +112,18 @@ export async function POST(request: Request) {
     const createdRow = res.rows[0] as DbRow
     // If this was created for an MRP order, ensure the order has an order_items row
     try {
-      const orderSrcRes = await pool.query<{ source: string }>('SELECT source FROM orders WHERE id = $1', [createdRow.order_id])
+      const orderSrcRes = await getPool().query<{ source: string }>('SELECT source FROM orders WHERE id = $1', [createdRow.order_id])
       const orderSource = String(orderSrcRes.rows[0]?.source ?? '').toLowerCase()
       const resultingQty = Number(createdRow.qty_to_produce ?? 0)
       if (orderSource === 'mrp' && resultingQty > 0) {
-        const existing = await pool.query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [createdRow.order_id, createdRow.material_id])
+        const existing = await getPool().query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [createdRow.order_id, createdRow.material_id])
         if (existing.rowCount > 0) {
-          await pool.query(
+          await getPool().query(
             'UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description) WHERE order_id = $1 AND material_id = $2',
             [createdRow.order_id, createdRow.material_id, resultingQty, createdRow.description ?? null]
           )
         } else {
-          await pool.query(
+          await getPool().query(
             `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description)
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [createdRow.order_id, createdRow.material_id, resultingQty, 0, '', 'PRODUCE', createdRow.description ?? null]
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
     // Also create/update a production reservation tied to this order/material
     try {
         if (Number(createdRow.qty_to_produce ?? 0) > 0) {
-         await pool.query(
+         await getPool().query(
           `INSERT INTO production_reservations (order_id, material_id, qty, created_at, updated_at)
            VALUES ($1, $2, $3, now(), now())
            ON CONFLICT (order_id, material_id) DO UPDATE SET qty = EXCLUDED.qty, updated_at = now()`,
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
         )
       } else {
         // If qty is zero, ensure no lingering reservation remains
-        await pool.query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [orderId, materialId])
+        await getPool().query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [orderId, materialId])
       }
     } catch (e) {
       // don't fail the whole request for reservation write issues; log and continue
@@ -156,11 +156,11 @@ export async function POST(request: Request) {
         try {
           const orderSrc = String(createdRow.order_source ?? '').toLowerCase()
           if (orderSrc === 'mrp') {
-            const existing = await pool.query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [createdRow.order_id, createdRow.material_id])
+            const existing = await getPool().query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [createdRow.order_id, createdRow.material_id])
             if (existing.rowCount > 0) {
-              await pool.query('UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description) WHERE order_id = $1 AND material_id = $2', [createdRow.order_id, createdRow.material_id, createdQty, createdRow.description ?? null])
+              await getPool().query('UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description) WHERE order_id = $1 AND material_id = $2', [createdRow.order_id, createdRow.material_id, createdQty, createdRow.description ?? null])
             } else {
-              await pool.query(`INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [createdRow.order_id, createdRow.material_id, createdQty, 0, '', 'PRODUCE', createdRow.description ?? null])
+              await getPool().query(`INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [createdRow.order_id, createdRow.material_id, createdQty, 0, '', 'PRODUCE', createdRow.description ?? null])
             }
           }
         } catch (e) {

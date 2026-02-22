@@ -44,8 +44,6 @@ export default function AdminClient({ currentUser, initialUsers }: AdminClientPr
     Object.fromEntries(initialUsers.map((user) => [user.id, user.role as Role]))
   );
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!currentUser || currentUser.role !== 'Admin') return;
@@ -211,8 +209,7 @@ export default function AdminClient({ currentUser, initialUsers }: AdminClientPr
           <CardDescription>Altere roles rapidamente ou redefina senhas via API.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {loadingUsers && <p className="text-sm text-muted-foreground">Carregando usuarios...</p>}
-          {!loadingUsers && sortedUsers.length === 0 && (
+          {sortedUsers.length === 0 && (
             <p className="text-sm text-muted-foreground">Nenhum usuario encontrado.</p>
           )}
           <div className="space-y-2">

@@ -41,14 +41,35 @@ async function main() {
 
     console.log('Applying', file)
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8')
+    const hasConcurrently =
+      /CREATE\s+INDEX\s+CONCURRENTLY/i.test(sql) || sql.toLowerCase().includes('concurrently')
+    const wrapTransaction = !hasConcurrently
+    const statements = wrapTransaction
+      ? [sql]
+      : sql
+          .split(';')
+          .map((statement) => statement.trim())
+          .filter(Boolean)
     try {
-      await client.query('BEGIN')
-      await client.query(sql)
+      if (wrapTransaction) {
+        await client.query('BEGIN')
+      }
+
+      for (const statement of statements) {
+        await client.query(statement)
+      }
+
       await client.query('INSERT INTO schema_migrations(version) VALUES($1)', [version])
-      await client.query('COMMIT')
+
+      if (wrapTransaction) {
+        await client.query('COMMIT')
+      }
+
       console.log('Applied', file)
     } catch (err) {
-      await client.query('ROLLBACK')
+      if (wrapTransaction) {
+        await client.query('ROLLBACK')
+      }
       console.error('Failed to apply', file, err)
       process.exit(1)
     }

@@ -2,8 +2,9 @@
   "name": "nextn",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.4",
   "scripts": {
-    "dev": "next dev -p 9002",
+    "dev": "next dev --turbo",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "prebuild": "npm run db:migrate",
@@ -15,6 +16,7 @@
     "pm2:restart": "pm2 restart ecosystem.config.js",
     "pm2:logs": "pm2 logs",
     "start": "next start",
+    "clean:build": "node ./scripts/clean-build.js",
     "lint": "eslint src eslint.config.mjs next.config.ts tailwind.config.ts --ext .ts,.tsx,.mjs",
     "typecheck": "tsc --noEmit",
     "clear-db": "node ./scripts/clear-db.js",
@@ -87,6 +89,7 @@
     "genkit-cli": "^1.20.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
+    "turbo": "^2.8.10",
     "typescript": "^5"
   }
 }

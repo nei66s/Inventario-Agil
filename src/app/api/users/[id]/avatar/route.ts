@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { pool } from '@/lib/db';
+import { getPool } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import fs from 'fs/promises';
 import path from 'path';
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const avatarUrl = `/uploads/avatars/${filename}`;
 
-    await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, targetId]);
+    await getPool().query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, targetId]);
 
     return NextResponse.json({ avatarUrl });
   } catch (err) {

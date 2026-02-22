@@ -4,13 +4,60 @@ import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 import { LabelFormat, Order } from './types';
 
-let cachedLogoDataUrl: string | null = null;
+type SiteSettingsPayload = {
+  companyName: string;
+  platformLabel: string;
+  logoUrl: string | null;
+  logoDataUrl: string | null;
+};
 
-async function getLogoDataUrl() {
-  if (cachedLogoDataUrl) return cachedLogoDataUrl;
+const DEFAULT_LOGO_URL = '/black-tower-x-transp.png';
+
+const DEFAULT_SITE_SETTINGS: SiteSettingsPayload = {
+  companyName: 'Black Tower X',
+  platformLabel: 'Plataforma SaaS',
+  logoUrl: DEFAULT_LOGO_URL,
+  logoDataUrl: null,
+};
+
+let cachedSiteSettings: SiteSettingsPayload | null = null;
+const cachedLogoDataUrls = new Map<string, string>();
+
+async function fetchSiteSettingsSafely(): Promise<SiteSettingsPayload> {
+  if (cachedSiteSettings) return cachedSiteSettings;
 
   try {
-    const res = await fetch('/logo.png');
+    const response = await fetch('/api/site', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Falha ao buscar marca');
+    }
+    const payload = (await response.json()) as SiteSettingsPayload;
+    cachedSiteSettings = {
+      companyName: payload.companyName || DEFAULT_SITE_SETTINGS.companyName,
+      platformLabel: payload.platformLabel || DEFAULT_SITE_SETTINGS.platformLabel,
+      logoUrl: payload.logoUrl ?? DEFAULT_SITE_SETTINGS.logoUrl,
+      logoDataUrl: payload.logoDataUrl ?? DEFAULT_SITE_SETTINGS.logoDataUrl,
+    };
+    return cachedSiteSettings;
+  } catch (error) {
+    console.error('site settings fetch failed', error);
+    cachedSiteSettings = DEFAULT_SITE_SETTINGS;
+    return DEFAULT_SITE_SETTINGS;
+  }
+}
+
+async function resolveLogoDataUrl(logoDataUrl?: string | null, logoUrl?: string | null) {
+  if (logoDataUrl) {
+    return logoDataUrl;
+  }
+
+  const url: string = logoUrl ?? DEFAULT_LOGO_URL;
+  if (cachedLogoDataUrls.has(url)) {
+    return cachedLogoDataUrls.get(url)!;
+  }
+
+  try {
+    const res = await fetch(url);
     if (!res.ok) return null;
     const blob = await res.blob();
     const reader = new FileReader();
@@ -19,7 +66,7 @@ async function getLogoDataUrl() {
       reader.onerror = () => reject(new Error('Failed to read logo image'));
       reader.readAsDataURL(blob);
     });
-    cachedLogoDataUrl = dataUrl;
+    cachedLogoDataUrls.set(url, dataUrl);
     return dataUrl;
   } catch {
     return null;
@@ -90,13 +137,14 @@ async function renderExitLabel({ pdf, order, pickerName, pageIndex }: LabelRende
 
   const logoY = margin + 6;
   const logoSize = 30;
-  const logoDataUrl = await getLogoDataUrl();
+  const siteSettings = await fetchSiteSettingsSafely();
+  const logoDataUrl = await resolveLogoDataUrl(siteSettings.logoDataUrl, siteSettings.logoUrl);
   if (logoDataUrl) {
     pdf.addImage(logoDataUrl, 'PNG', pageWidth / 2 - logoSize / 2, logoY, logoSize, logoSize);
   }
 
   pdf.setFontSize(18);
-  pdf.text('São José Cordas', pageWidth / 2, logoY + logoSize + 6, { align: 'center' });
+  pdf.text(siteSettings.companyName, pageWidth / 2, logoY + logoSize + 6, { align: 'center' });
 
   const detailX = margin + 6;
   const detailStartY = logoY + logoSize + 12;
@@ -191,13 +239,14 @@ async function renderProductionLabel({ pdf, order, pickerName, pageIndex }: Labe
   pdf.setLineWidth(0.6);
   pdf.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
-  const logoDataUrl = await getLogoDataUrl();
+  const siteSettings = await fetchSiteSettingsSafely();
+  const logoDataUrl = await resolveLogoDataUrl(siteSettings.logoDataUrl, siteSettings.logoUrl);
   if (logoDataUrl) {
     pdf.addImage(logoDataUrl, 'PNG', pageWidth / 2 - logoSize / 2, logoY, logoSize, logoSize);
   }
 
   pdf.setFontSize(14);
-  pdf.text('São José Cordas', pageWidth / 2, logoY + logoSize + 8, { align: 'center' });
+  pdf.text(siteSettings.companyName, pageWidth / 2, logoY + logoSize + 8, { align: 'center' });
   const detailX = margin + 6;
   let detailY = logoY + logoSize + 16;
   pdf.setFontSize(10);

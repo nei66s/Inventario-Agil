@@ -52,6 +52,8 @@ npm run lint
 npm run build
 ```
 
+Para aproveitar o cache do Turbo com o npm 10+, rode os mesmos alvos via `npm turbo build`, `npm turbo lint` e `npm turbo typecheck`; o `turbo.json` no root define os outputs e dependências do pipeline para este pacote.
+
 ## Observacoes
 
 - Reservas usam TTL de 5 minutos e heartbeat.

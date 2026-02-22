@@ -4,7 +4,7 @@ const globalForPg = globalThis as typeof globalThis & {
   pgPool?: Pool
 }
 
-const perfEnabled = process.env.NODE_ENV !== 'production' || process.env.DEBUG_PERF === 'true'
+let poolInstance: Pool | undefined
 
 function ensureSslMode(url: string): string {
   if (url.includes('sslmode=')) {
@@ -13,9 +13,25 @@ function ensureSslMode(url: string): string {
   return url.includes('?') ? `${url}&sslmode=disable` : `${url}?sslmode=disable`
 }
 
-const envPoolConfig: PoolConfig = (() => {
+function getPerfEnabled(): boolean {
+  return process.env.NODE_ENV !== 'production' || process.env.DEBUG_PERF === 'true'
+}
+
+function toPositiveInt(rawValue: string | undefined, fallback: number): number {
+  const parsed = Number(rawValue ?? '')
+  return Number.isFinite(parsed) && parsed > 0 ? Math.max(1, parsed) : fallback
+}
+
+export function getPoolConfig(): PoolConfig {
+  const baseConfig: PoolConfig = {
+    max: toPositiveInt(process.env.PG_POOL_MAX, 10),
+    idleTimeoutMillis: toPositiveInt(process.env.PG_IDLE_TIMEOUT_MS, 30_000),
+    connectionTimeoutMillis: toPositiveInt(process.env.PG_CONNECTION_TIMEOUT_MS, 20_000),
+  }
+
   if (process.env.DATABASE_URL) {
     return {
+      ...baseConfig,
       connectionString: ensureSslMode(process.env.DATABASE_URL),
     }
   }
@@ -25,30 +41,24 @@ const envPoolConfig: PoolConfig = (() => {
     throw new Error('DATABASE_URL or PGHOST/PGUSER/PGDATABASE must be set')
   }
 
-    return {
-      host: PGHOST,
-      user: PGUSER,
-      password: PGPASSWORD,
-      database: PGDATABASE,
-      port: PGPORT ? Number(PGPORT) : 5432,
-    }
-})()
-
-const poolConfig: PoolConfig = {
-  max: 5,
-  idleTimeoutMillis: 30_000,
-  connectionTimeoutMillis: 2_000,
-  ...envPoolConfig,
+  return {
+    ...baseConfig,
+    host: PGHOST,
+    user: PGUSER,
+    password: PGPASSWORD,
+    database: PGDATABASE,
+    port: PGPORT ? Number(PGPORT) : 5432,
+  }
 }
 
-function logPoolEvent(event: string, details?: string) {
-  if (perfEnabled) {
+function logPoolEvent(event: string, details?: string): void {
+  if (getPerfEnabled()) {
     const suffix = details ? ` ${details}` : ''
     console.debug(`[db][pool:${event}]${suffix}`)
   }
 }
 
-function logPoolError(event: string, error: NodeJS.ErrnoException) {
+function logPoolError(event: string, error: NodeJS.ErrnoException): void {
   console.error(`[db][pool:${event}] code=${error.code ?? 'unknown'} message=${error.message}`, error.stack)
 }
 
@@ -67,49 +77,42 @@ function normalizeError(error: unknown) {
       : undefined)
   const code =
     err.code ??
-    (typeof error === 'object' && error !== null && 'code' in error ? String((error as Record<string, unknown>).code) : 'unknown')
+    (typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as Record<string, unknown>).code)
+      : 'unknown')
   return { code, message, stack, raw: error }
 }
 
 function createPoolInstance(): Pool {
-  console.log('DATABASE_URL RAW:', process.env.DATABASE_URL)
-  console.log('PGDATABASE:', process.env.PGDATABASE)
-  console.log('PGHOST:', process.env.PGHOST)
-  console.log('PGPORT:', process.env.PGPORT)
-  console.log('DB URL FINAL:', process.env.DATABASE_URL)
-  const pool = new Pool(poolConfig)
-
+  const pool = new Pool(getPoolConfig())
   pool.on('error', (error) => logPoolError('error', error))
   pool.on('connect', () => logPoolEvent('connect'))
   pool.on('acquire', () => logPoolEvent('acquire'))
   pool.on('remove', () => logPoolEvent('remove'))
-
   return pool
 }
 
-let cachedPool: Pool | undefined
-
-function getOrCreatePool(): Pool {
-  if (cachedPool) {
-    return cachedPool
+export function getPool(): Pool {
+  if (poolInstance) {
+    return poolInstance
   }
 
   if (globalForPg.pgPool) {
-    cachedPool = globalForPg.pgPool
-    return cachedPool
+    poolInstance = globalForPg.pgPool
+    return poolInstance
   }
 
-  cachedPool = createPoolInstance()
+  poolInstance = createPoolInstance()
   if (process.env.NODE_ENV !== 'production') {
-    globalForPg.pgPool = cachedPool
+    globalForPg.pgPool = poolInstance
   }
-  if (perfEnabled) {
+  if (getPerfEnabled()) {
     console.debug('[db] initialized postgres pool')
   }
-  return cachedPool
+  return poolInstance
 }
 
-async function shutdownPool(pool: Pool) {
+async function shutdownPool(pool: Pool): Promise<void> {
   try {
     await pool.end()
   } catch (error) {
@@ -118,26 +121,17 @@ async function shutdownPool(pool: Pool) {
 }
 
 async function replacePool(): Promise<Pool> {
-  const current = cachedPool ?? globalForPg.pgPool
+  const current = poolInstance ?? globalForPg.pgPool
   if (current) {
     await shutdownPool(current)
   }
 
-  cachedPool = createPoolInstance()
+  poolInstance = createPoolInstance()
   if (process.env.NODE_ENV !== 'production') {
-    globalForPg.pgPool = cachedPool
+    globalForPg.pgPool = poolInstance
   }
-  return cachedPool
+  return poolInstance
 }
-
-const poolProxy = new Proxy({} as Pool, {
-  get(_, prop) {
-    const target = getOrCreatePool()
-    return (target as any)[prop]
-  },
-}) as Pool
-
-export const pool = poolProxy
 
 export type QueryResultWithStats<T extends QueryResultRow = any> = QueryResult<T> & {
   queryTimeMs: number
@@ -171,11 +165,11 @@ export async function query<T extends QueryResultRow = any>(text: string | Query
 
   while (true) {
     try {
-      const result = await getOrCreatePool().query<T>(config)
+      const result = await getPool().query<T>(config)
       const queryDurationMs = Number(process.hrtime.bigint() - totalStart) / 1_000_000
       const textSummary = config.text?.split('\n')[0].trim() ?? ''
 
-      if (perfEnabled) {
+      if (getPerfEnabled()) {
         console.debug(
           `[perf][db] queryMs=${queryDurationMs.toFixed(2)}ms rows=${result.rowCount ?? 0} textSummary=${textSummary || '<raw>'}`
         )
@@ -184,7 +178,7 @@ export async function query<T extends QueryResultRow = any>(text: string | Query
       return Object.assign(result, { queryTimeMs: queryDurationMs }) as QueryResultWithStats<T>
     } catch (error) {
       const errInfo = normalizeError(error)
-      console.error("[db][query] error", `[code=${errInfo.code}] ${errInfo.message}`, errInfo.stack)
+      console.error('[db][query] error', `[code=${errInfo.code}] ${errInfo.message}`, errInfo.stack)
 
       if (errInfo.code === 'ECONNRESET' && !retried) {
         retried = true
@@ -207,4 +201,4 @@ export async function testConnection() {
   }
 }
 
-export default poolProxy
+export default getPool

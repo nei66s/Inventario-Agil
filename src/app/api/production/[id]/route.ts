@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import pool from '@/lib/db'
+import { getPool } from '@/lib/db'
 
 type DbRow = {
   id: number
@@ -67,7 +67,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     } else {
       // For 'complete' we capture qty_to_produce before zeroing it,
       // update task to DONE and set qty_to_produce = 0, then create a DRAFT receipt.
-      const client = await pool.connect();
+      const client = await getPool().connect();
       try {
         await client.query('BEGIN');
         const pick = await client.query<{ qty_to_produce: string | number; material_id: number }>(
@@ -130,21 +130,21 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       }
     }
     // For 'start' action we execute the prepared SQL, then ensure a production_reservation exists
-    const res = await pool.query<DbRow>(sql, [taskId]);
+    const res = await getPool().query<DbRow>(sql, [taskId]);
     if (res.rowCount === 0) return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 });
 
     const row = res.rows[0];
     const qtyToProduce = Number(row.qty_to_produce ?? 0);
     try {
       if (qtyToProduce > 0) {
-        await pool.query(
+        await getPool().query(
           `INSERT INTO production_reservations (order_id, material_id, qty, created_at, updated_at)
            VALUES ($1, $2, $3, now(), now())
            ON CONFLICT (order_id, material_id) DO UPDATE SET qty = EXCLUDED.qty, updated_at = now()`,
           [row.order_id, row.material_id, qtyToProduce]
         );
       } else {
-        await pool.query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [row.order_id, row.material_id]);
+        await getPool().query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [row.order_id, row.material_id]);
       }
     } catch (e) {
       console.error('production reservation upsert error', e);
