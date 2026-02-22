@@ -214,10 +214,10 @@ async function renderExitLabel({ pdf, order, pickerName, pageIndex }: LabelRende
   pdf.text(`Impresso em ${shortDate(new Date().toISOString())}`, margin + 6, pageHeight - margin - 4);
 }
 
-async function renderProductionLabel({ pdf, order, pickerName, pageIndex }: LabelRenderContext) {
+async function renderProductionLabel({ pdf, order, pageIndex }: LabelRenderContext) {
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 2; // Margem reduzida para 40x40
+  const margin = 2;
   const baseItem = order.items[0] ?? {
     materialName: 'Material',
     color: 'Cor',
@@ -233,60 +233,82 @@ async function renderProductionLabel({ pdf, order, pickerName, pageIndex }: Labe
     conditions: (baseItem.conditions && Array.isArray(baseItem.conditions)) ? baseItem.conditions : []
   };
 
-  const peso = Math.max(item.qtySeparated, item.qtyToProduce ?? item.qtyRequested);
-
   pdf.setDrawColor(0);
   pdf.setLineWidth(0.4);
   pdf.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
 
   const siteSettings = await fetchSiteSettingsSafely();
-  pdf.setFontSize(7);
-  pdf.text(siteSettings.companyName.slice(0, 20), margin + 2, margin + 4);
+  const logoDataUrl = await resolveLogoDataUrl(siteSettings.logoDataUrl, siteSettings.logoUrl);
 
-  // QR Code on Top Right (smaller)
-  const qrSize = 14;
-  await addQr(pdf, order, pageIndex, 'PRODUCTION_4x4', pageWidth - margin - qrSize - 1, margin + 1, qrSize);
+  // Cabeçalho Centralizado
+  let currentY = margin + 1;
+  const logoSize = 7;
 
-  const detailX = margin + 2;
-  let detailY = margin + 8;
-
-  pdf.setFontSize(8);
-  pdf.text(`${order.orderNumber}`, detailX, detailY);
-
-  detailY += 4;
-  pdf.setFontSize(7);
-  pdf.text(`Prod: ${peso} ${item.uom}`, detailX, detailY);
-
-  detailY += 4;
-  pdf.text(`Mat: ${item.materialName.slice(0, 20)}`, detailX, detailY);
-
-  if (item.color) {
-    detailY += 3.5;
-    pdf.text(`Cor: ${item.color.slice(0, 20)}`, detailX, detailY);
+  if (logoDataUrl) {
+    pdf.addImage(logoDataUrl, 'PNG', pageWidth / 2 - logoSize / 2, currentY, logoSize, logoSize);
+    currentY += logoSize + 2;
+  } else {
+    currentY += 2;
   }
 
+  pdf.setFontSize(6);
+  pdf.text(siteSettings.companyName.slice(0, 35), pageWidth / 2, currentY, { align: 'center' });
+  currentY += 3.2;
+
+  const detailX = margin + 2;
+
+  // Número do Pedido
+  pdf.setFontSize(7.5);
+  pdf.text(`${order.orderNumber}`, detailX, currentY);
+  currentY += 3.8;
+
+  // Detalhes da Produção e Quantidades
+  pdf.setFontSize(6.5);
+  pdf.text(`Solicitado: ${item.qtyRequested} ${item.uom}`, detailX, currentY);
+  currentY += 3;
+
+  if (item.producedQty !== undefined) {
+    pdf.text(`Produzido: ${item.producedQty} ${item.uom}`, detailX, currentY);
+    currentY += 3;
+  }
+
+  if (item.producedWeight !== undefined) {
+    pdf.text(`Peso: ${item.producedWeight} KG`, detailX, currentY);
+    currentY += 3;
+  }
+
+  pdf.text(`Mat: ${item.materialName.slice(0, 30)}`, detailX, currentY);
+  currentY += 3;
+
+  if (item.color) {
+    pdf.text(`Cor: ${item.color.slice(0, 30)}`, detailX, currentY);
+    currentY += 3;
+  }
+
+  // Condições
   const conditions = item.conditions;
   if (conditions.length > 0) {
-    detailY += 3.5;
-    pdf.setFontSize(6);
-    pdf.text('Condições:', detailX, detailY);
-    detailY += 3;
+    pdf.setFontSize(5.2);
+    pdf.text('Condições:', detailX, currentY);
+    currentY += 2.6;
     for (const cond of conditions) {
-      if (detailY > pageHeight - margin - 3) break;
+      if (currentY > pageHeight - margin - 5) break;
       const condText = `${cond.key}: ${cond.value}`;
-      pdf.text(condText.slice(0, 30), detailX, detailY);
-      detailY += 3;
+      pdf.text(condText.slice(0, 45), detailX, currentY);
+      currentY += 2.4;
     }
   }
 
-  if (item.description && detailY < pageHeight - margin - 5) {
-    detailY += 1;
-    pdf.setFontSize(5);
-    pdf.text(item.description.slice(0, 60), detailX, detailY, { maxWidth: pageWidth - margin * 2 - 4 });
+  // Descrição
+  if (item.description && currentY < pageHeight - margin - 4) {
+    if (item.description.trim().toLowerCase() !== item.materialName.trim().toLowerCase()) {
+      pdf.setFontSize(4.8);
+      pdf.text(item.description.slice(0, 85), detailX, currentY, { maxWidth: pageWidth - margin * 2 - 4 });
+    }
   }
 
-  // Footer
-  pdf.setFontSize(5);
+  // Rodapé
+  pdf.setFontSize(4.5);
   const footerText = `${simpleDate(order.orderDate)} - Pç: ${pageIndex + 1}/${Math.max(1, order.volumeCount)}`;
   pdf.text(footerText, margin + 2, pageHeight - margin - 1);
 }

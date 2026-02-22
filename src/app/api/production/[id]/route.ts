@@ -12,6 +12,8 @@ type DbRow = {
   status: 'PENDING' | 'IN_PROGRESS' | 'DONE'
   created_at: string
   updated_at: string
+  produced_qty?: string | number | null
+  produced_weight?: string | number | null
   order_number: string | null
   material_name: string | null
   order_source: string | null
@@ -29,6 +31,8 @@ function toApiTask(row: DbRow) {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    producedQty: row.produced_qty !== null && row.produced_qty !== undefined ? Number(row.produced_qty) : undefined,
+    producedWeight: row.produced_weight !== null && row.produced_weight !== undefined ? Number(row.produced_weight) : undefined,
     isMrp: String(row.order_source ?? '').toLowerCase() === 'mrp',
   }
 }
@@ -50,8 +54,26 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const action = String(payload.action ?? '').toLowerCase()
 
     if (!taskId) return NextResponse.json({ error: 'id inválido' }, { status: 400 })
-    if (action !== 'start' && action !== 'complete') {
-      return NextResponse.json({ error: 'action deve ser start ou complete' }, { status: 400 })
+    if (action !== 'start' && action !== 'complete' && action !== 'update_produced') {
+      return NextResponse.json({ error: 'action inválida' }, { status: 400 })
+    }
+
+    if (action === 'update_produced') {
+      const producedQty = payload.producedQty !== undefined ? Number(payload.producedQty) : null
+      const producedWeight = payload.producedWeight !== undefined ? Number(payload.producedWeight) : null
+
+      const res = await getPool().query(
+        `UPDATE production_tasks
+         SET produced_qty = $2, produced_weight = $3, updated_at = now()
+         WHERE id = $1
+         RETURNING id, order_id, material_id, qty_to_produce, status, produced_qty, produced_weight, created_at, updated_at,
+          (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
+          (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
+          (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name`,
+        [taskId, producedQty, producedWeight]
+      )
+      if (res.rowCount === 0) return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 })
+      return NextResponse.json(toApiTask(res.rows[0]))
     }
 
     let sql = ''
@@ -76,7 +98,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       try {
         await client.query('BEGIN');
         const pick = await client.query(
-          'SELECT qty_to_produce, material_id FROM production_tasks WHERE id = $1 FOR UPDATE',
+          'SELECT qty_to_produce, produced_qty, material_id FROM production_tasks WHERE id = $1 FOR UPDATE',
           [taskId]
         );
         if (pick.rowCount === 0) {
@@ -84,8 +106,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           return NextResponse.json({ error: 'Tarefa não encontrada' }, { status: 404 });
         }
 
-        const pickRow = pick.rows[0] as { qty_to_produce: string | number; material_id: number } | undefined;
-        const qtyProduced = Number(pickRow?.qty_to_produce ?? 0);
+        const pickRow = pick.rows[0] as { qty_to_produce: string | number; produced_qty: string | number | null; material_id: number } | undefined;
+        let qtyProduced = Number(pickRow?.produced_qty ?? 0);
+        if (qtyProduced <= 0) {
+          qtyProduced = Number(pickRow?.qty_to_produce ?? 0);
+        }
         const materialId = Number(pickRow?.material_id ?? 0);
 
         const upd = await client.query(
@@ -96,12 +121,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
              completed_at = now(),
              updated_at = now()
            WHERE id = $1
-           RETURNING id, order_id, material_id, qty_to_produce, status, created_at, updated_at,
+           RETURNING id, order_id, material_id, qty_to_produce, status, produced_qty, produced_weight, created_at, updated_at,
           (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
           (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
           (SELECT created_by FROM orders WHERE id = production_tasks.order_id) AS order_created_by,
           (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name`,
-            [taskId]
+          [taskId]
         );
 
         if (upd.rowCount === 0) {

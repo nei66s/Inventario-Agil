@@ -16,6 +16,8 @@ type DbRow = {
   color?: string | null
   description?: string | null
   conditions?: string | { key: string; value: string }[] | null
+  produced_qty?: string | number | null
+  produced_weight?: string | number | null
 }
 
 function parseJson<T>(value: unknown, fallback: T): T {
@@ -45,6 +47,8 @@ function toApiTask(row: DbRow) {
     color: row.color ?? '',
     description: row.description ?? undefined,
     conditions: parseJson(row.conditions, []),
+    producedQty: row.produced_qty !== null ? Number(row.produced_qty) : undefined,
+    producedWeight: row.produced_weight !== null ? Number(row.produced_weight) : undefined,
   }
 }
 
@@ -62,6 +66,8 @@ export async function GET() {
          pt.material_id,
          pt.qty_to_produce,
          pt.status,
+         pt.produced_qty,
+         pt.produced_weight,
          pt.created_at,
          pt.updated_at,
        o.order_number,

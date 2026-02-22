@@ -19,6 +19,16 @@ import type { Order } from '@/lib/domain/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { productionTaskStatusLabel } from '@/lib/domain/i18n';
 import { notifyDataRefreshed } from '@/lib/data-refresh';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type ProductionTask = {
   id: string;
@@ -35,6 +45,8 @@ type ProductionTask = {
   isMrp?: boolean;
   pendingReceiptId?: string | null;
   conditions?: { key: string; value: string }[];
+  producedQty?: number;
+  producedWeight?: number;
 };
 
 function errorMessage(err: unknown): string {
@@ -124,10 +136,30 @@ export default function ProductionPage() {
     }
   };
 
+  const saveMeta = async (taskId: string, producedQty?: number, producedWeight?: number) => {
+    try {
+      setBusyTaskId(taskId);
+      const res = await fetch(`/api/production/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_produced', producedQty, producedWeight }),
+      });
+      if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+      await loadTasks({ skipLoading: true });
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Falha ao salvar dados de produção');
+    } finally {
+      setBusyTaskId(null);
+    }
+  };
+
   const handlePrintProductionLabel = async (task: ProductionTask) => {
     setError(null);
     setBusyLabelTaskId(task.id);
     const qty = Math.max(0, Number(task.qtyToProduce ?? 0));
+    const pQty = task.producedQty ?? qty;
+    const pWeight = task.producedWeight;
+
     const orderDate = task.createdAt ?? new Date().toISOString();
     const dueDate = task.updatedAt ?? orderDate;
     const labelOrder: Order = {
@@ -155,6 +187,8 @@ export default function ProductionPage() {
           qtyReservedFromStock: 0,
           qtyToProduce: qty,
           qtySeparated: qty,
+          producedQty: pQty,
+          producedWeight: pWeight,
           separatedWeight: qty,
           conditions: task.conditions ?? [],
         },
@@ -196,6 +230,31 @@ export default function ProductionPage() {
       <TableCell className="text-sm text-muted-foreground">{task.description ?? task.materialName}</TableCell>
       <TableCell className="text-sm text-muted-foreground">{task.color ?? ''}</TableCell>
       <TableCell className="text-right">{task.qtyToProduce}</TableCell>
+      <TableCell className="p-1">
+        <Input
+          type="number"
+          className="h-8 text-center"
+          defaultValue={task.producedQty ?? ''}
+          placeholder="Qtd."
+          onBlur={(e) => {
+            const val = e.target.value === '' ? undefined : Number(e.target.value);
+            if (val !== task.producedQty) saveMeta(task.id, val, task.producedWeight);
+          }}
+        />
+      </TableCell>
+      <TableCell className="p-1">
+        <Input
+          type="number"
+          step="0.01"
+          className="h-8 text-center"
+          defaultValue={task.producedWeight ?? ''}
+          placeholder="Peso"
+          onBlur={(e) => {
+            const val = e.target.value === '' ? undefined : Number(e.target.value);
+            if (val !== task.producedWeight) saveMeta(task.id, task.producedQty, val);
+          }}
+        />
+      </TableCell>
       <TableCell>
         <Badge variant={task.status === 'DONE' ? 'positive' : task.status === 'IN_PROGRESS' ? 'warning' : 'outline'}>
           {productionTaskStatusLabel(task.status)}
@@ -259,7 +318,9 @@ export default function ProductionPage() {
               <TableHead>Material</TableHead>
               <TableHead>Desc</TableHead>
               <TableHead>Cor</TableHead>
-              <TableHead className="text-right">Qtd. para produzir</TableHead>
+              <TableHead className="text-right">Qtd Solic.</TableHead>
+              <TableHead className="text-center w-[100px]">Qtd Prod.</TableHead>
+              <TableHead className="text-center w-[100px]">Peso (KG)</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Atualizado</TableHead>
               <TableHead className="text-right">Acoes</TableHead>
@@ -268,13 +329,13 @@ export default function ProductionPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
                   Carregando tarefas...
                 </TableCell>
               </TableRow>
             ) : activeTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="border-none py-8">
+                <TableCell colSpan={11} className="border-none py-8">
                   <EmptyState
                     icon={Factory}
                     title="Sem tarefas pendentes"
@@ -284,7 +345,7 @@ export default function ProductionPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              activeTasks.map(renderTaskRow)
+              activeTasks.map((task) => renderTaskRow(task))
             )}
           </TableBody>
         </Table>
@@ -311,14 +372,16 @@ export default function ProductionPage() {
                     <TableHead>Material</TableHead>
                     <TableHead>Desc</TableHead>
                     <TableHead>Cor</TableHead>
-                    <TableHead className="text-right">Qtd. para produzir</TableHead>
+                    <TableHead className="text-right">Qtd Solic.</TableHead>
+                    <TableHead className="text-center w-[100px]">Qtd Prod.</TableHead>
+                    <TableHead className="text-center w-[100px]">Peso (KG)</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Atualizado</TableHead>
                     <TableHead className="text-right">Acoes</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {historyTasks.map(renderTaskRow)}
+                  {historyTasks.map((task) => renderTaskRow(task))}
                 </TableBody>
               </Table>
             </div>

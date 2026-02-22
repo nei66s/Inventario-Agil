@@ -114,6 +114,8 @@ export type OrderItem = {
   qtyToBuy?: number;
   qtySeparated: number;
   separatedWeight?: number;
+  producedQty?: number;
+  producedWeight?: number;
   itemCondition?: string;
   conditionTemplateName?: string;
   // Lista de condições específicas do item (ex: cor: vermelho, lote: 1234)
