@@ -63,11 +63,19 @@ function formatRow(row: {
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-  await createDefaults();
-  const result = await getPool().query(
+  let result = await getPool().query(
     'SELECT company_name, document, phone, address, platform_label, logo_url, logo_data, logo_content_type, updated_at FROM site_settings WHERE id = $1',
     [PRIMARY_SITE_ID]
   );
+
+  if (result.rowCount === 0) {
+    await createDefaults();
+    result = await getPool().query(
+      'SELECT company_name, document, phone, address, platform_label, logo_url, logo_data, logo_content_type, updated_at FROM site_settings WHERE id = $1',
+      [PRIMARY_SITE_ID]
+    );
+  }
+
   if (result.rowCount === 0) {
     throw new Error('Site settings are not available');
   }

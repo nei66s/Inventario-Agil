@@ -33,25 +33,27 @@ export function LoginShell({ branding }: LoginShellProps) {
     ? theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />
     : null;
 
+  // Read initial theme from document element (already set by layout.tsx script)
   useEffect(() => {
-    const saved = window.localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialTheme =
-      saved === 'dark' || saved === 'light' ? saved : prefersDark ? 'dark' : 'light';
-    setTheme(initialTheme);
-    setMounted(true);
+    const isDark = document.documentElement.classList.contains('dark');
+    setTheme(isDark ? 'dark' : 'light');
+
+    // Defer mounting state to next frame to keep main thread free for interaction
+    const frame = requestAnimationFrame(() => {
+      setMounted(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
+  // Simplified theme toggle effect - only updates state and storage
   useEffect(() => {
+    if (!mounted) return;
+
     const isDark = theme === 'dark';
     document.documentElement.classList.toggle('dark', isDark);
     window.localStorage.setItem('theme', theme);
-    try {
-      document.cookie = `theme=${theme};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
-    } catch (error) {
-      console.error(error);
-    }
-  }, [theme]);
+    document.cookie = `theme=${theme};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  }, [theme, mounted]);
 
   const toggleTheme = () => setTheme((current) => (current === 'dark' ? 'light' : 'dark'));
 
@@ -111,6 +113,7 @@ export function LoginShell({ branding }: LoginShellProps) {
               src="/black-tower-x-transp.png"
               alt="Black Tower X"
               fill
+              sizes="48px"
               className="object-contain p-1 dark:brightness-200 dark:invert-0 brightness-0 invert"
               priority
             />
@@ -146,7 +149,7 @@ export function LoginShell({ branding }: LoginShellProps) {
       </div>
 
       {/* Right side - Login Form */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 relative bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+      <div className="flex-1 flex flex-col items-center justify-center p-6 relative bg-slate-50 dark:bg-slate-950">
         <div className="absolute right-4 top-4 z-20 sm:right-8 sm:top-8">
           <Button
             variant="ghost"
@@ -159,7 +162,14 @@ export function LoginShell({ branding }: LoginShellProps) {
           </Button>
         </div>
 
-        <div className="w-full max-w-[420px] space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div
+          className="w-full max-w-[420px] space-y-8 opacity-0 mounted:opacity-100 mounted:animate-in mounted:fade-in mounted:slide-in-from-bottom-4 duration-500 ease-out"
+          style={{
+            opacity: mounted ? 1 : 0,
+            transform: mounted ? 'translateY(0)' : 'translateY(1rem)',
+            transition: 'opacity 0.5s ease-out, transform 0.5s ease-out'
+          }}
+        >
           {/* Mobile branding fallback */}
           <div className="flex md:hidden flex-col items-center gap-3 mb-8">
             <div className="relative h-16 w-16 bg-white dark:bg-slate-900 p-3 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
@@ -167,8 +177,8 @@ export function LoginShell({ branding }: LoginShellProps) {
                 src="/black-tower-x-transp.png"
                 alt="Black Tower X"
                 fill
+                sizes="64px"
                 className="object-contain p-2 dark:brightness-200 dark:invert-0"
-                priority
               />
             </div>
             <div className="text-center">
@@ -177,7 +187,7 @@ export function LoginShell({ branding }: LoginShellProps) {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl rounded-3xl p-8 sm:p-10 border border-slate-200/60 dark:border-slate-800/60 transition-all">
+          <div className="bg-white dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl rounded-3xl p-8 sm:p-10 border border-slate-200/60 dark:border-slate-800/60 transition-opacity duration-300">
             <div className="flex flex-col items-center space-y-5 mb-10">
               <div className="relative h-14 w-48 mb-2">
                 <Image
@@ -212,7 +222,7 @@ export function LoginShell({ branding }: LoginShellProps) {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 dark:focus-visible:ring-indigo-400 transition-all"
+                    className="h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 dark:focus-visible:ring-indigo-400 transition-colors"
                     placeholder="voce@empresa.com"
                   />
                 </div>
@@ -231,7 +241,7 @@ export function LoginShell({ branding }: LoginShellProps) {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 dark:focus-visible:ring-indigo-400 transition-all"
+                    className="h-12 px-4 rounded-xl bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 dark:focus-visible:ring-indigo-400 transition-colors"
                     placeholder="••••••••"
                   />
                 </div>
