@@ -106,7 +106,7 @@ export default function InventoryPage() {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, read }),
-    }).catch(() => {});
+    }).catch(() => { });
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, readAt: read ? new Date().toISOString() : undefined } : n)));
   };
 
@@ -128,10 +128,10 @@ export default function InventoryPage() {
           <CardContent>
             <Table>
               <TableHeader>
-              <TableRow>
-                <TableHead className="w-20"></TableHead>
-                <TableHead>Material</TableHead>
-                <TableHead className="text-right">Em estoque</TableHead>
+                <TableRow>
+                  <TableHead className="w-20"></TableHead>
+                  <TableHead>Material</TableHead>
+                  <TableHead className="text-right">Em estoque</TableHead>
                   <TableHead className="text-right">Reservado</TableHead>
                   <TableHead className="text-right">Reservado produção</TableHead>
                   <TableHead className="text-right">Disponivel</TableHead>
@@ -165,63 +165,63 @@ export default function InventoryPage() {
                               Vertentes
                             </Button>
                           ) : (
-                            <span className="text-xs text-muted-foreground">â€”</span>
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                         <TableCell>
-                        <p className="font-medium">{material?.name}</p>
-                        <p className="text-xs text-muted-foreground">{entry.materialId} - min {material?.minStock} - ponto de pedido {material?.reorderPoint}</p>
-                      </TableCell>
-                      <TableCell className="text-right">{entry.onHand}</TableCell>
-                      <TableCell className="text-right">{entry.reservedTotal}</TableCell>
-                      <TableCell className="text-right">{entry.productionReserved ?? 0}</TableCell>
-                      <TableCell className="text-right font-semibold">{entry.available}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={statusVariant}>{statusVariant === 'destructive' ? 'RUPTURA' : statusVariant === 'warning' ? 'BAIXO' : 'OK'}</Badge>
-                      </TableCell>
+                          <p className="font-medium">{material?.name}</p>
+                          <p className="text-xs text-muted-foreground">{entry.materialId} - min {material?.minStock} - ponto de pedido {material?.reorderPoint}</p>
+                        </TableCell>
+                        <TableCell className="text-right">{entry.onHand}</TableCell>
+                        <TableCell className="text-right">{entry.reservedTotal}</TableCell>
+                        <TableCell className="text-right">{entry.productionReserved ?? 0}</TableCell>
+                        <TableCell className="text-right font-semibold">{entry.available}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant={statusVariant}>{statusVariant === 'destructive' ? 'RUPTURA' : statusVariant === 'warning' ? 'BAIXO' : 'OK'}</Badge>
+                        </TableCell>
                       </TableRow>
                       {isExpanded && variantRows.length > 0 && (
                         <TableRow key={`${entry.materialId}-variants`}>
                           <TableCell className="border-none p-0" />
                           <TableCell colSpan={6} className="border-none bg-muted/10 px-3 py-4 sm:px-6">
-                          <div className="space-y-3">
-                            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Materiais Condicionados</p>
-                            <div className="grid gap-3 md:grid-cols-2">
-                              {variantRows.map((variant, variantIndex) => {
-                                const summary =
-                                  variant.conditions
-                                    .map((cond) => `${cond.key}: ${cond.value}`)
-                                    .filter(Boolean)
-                                    .join(' â€¢ ') || 'Sem condições';
-                                const variantKey = `${entry.materialId}-${variantIndex}-${summary}`;
-                                return (
-                                  <div key={variantKey} className="rounded-2xl border border-border bg-background/70 p-3 shadow-sm">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-sm font-semibold">{summary}</p>
-                                      <span className="text-xs text-muted-foreground">
-                                        Solic: {variant.quantityRequested}
-                                      </span>
+                            <div className="space-y-3">
+                              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Materiais Condicionados</p>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                {variantRows.map((variant, variantIndex) => {
+                                  const summary =
+                                    variant.conditions
+                                      .map((cond) => `${cond.key}: ${cond.value}`)
+                                      .filter(Boolean)
+                                      .join(' • ') || 'Sem condições';
+                                  const variantKey = `${entry.materialId}-${variantIndex}-${summary}`;
+                                  return (
+                                    <div key={variantKey} className="rounded-2xl border border-border bg-background/70 p-3 shadow-sm">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="text-sm font-semibold">{summary}</p>
+                                        <span className="text-xs text-muted-foreground">
+                                          Solic: {variant.quantityRequested}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-2 lg:grid-cols-3">
+                                        <div>
+                                          <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Reservado</p>
+                                          <p className="text-sm font-semibold text-foreground">{variant.reservedFromStock}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Produção</p>
+                                          <p className="text-sm font-semibold text-amber-600">{variant.qtyToProduce}</p>
+                                        </div>
+                                        <div>
+                                          <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Total</p>
+                                          <p className="text-sm font-semibold text-foreground">{variant.quantityRequested}</p>
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-2 lg:grid-cols-3">
-                                      <div>
-                                        <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Reservado</p>
-                                        <p className="text-sm font-semibold text-foreground">{variant.reservedFromStock}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Produção</p>
-                                        <p className="text-sm font-semibold text-amber-600">{variant.qtyToProduce}</p>
-                                      </div>
-                                      <div>
-                                        <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Total</p>
-                                        <p className="text-sm font-semibold text-foreground">{variant.quantityRequested}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
+                          </TableCell>
                         </TableRow>
                       )}
                     </Fragment>

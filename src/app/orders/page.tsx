@@ -410,7 +410,6 @@ export default function OrdersPage() {
     return db.orders.filter((order) => {
       if (order.trashedAt) return false;
       const orderIsMrp = isMrpOrder(order);
-      if (orderIsMrp && !order.hasPendingProduction) return false;
       if (mrpView === 'mrp' && !orderIsMrp) return false;
       if (mrpView === 'standard' && orderIsMrp) return false;
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { notifyOrderCompleted } from '@/lib/notifications'
+import { invalidateDashboardCache, refreshDashboardSnapshot } from '@/lib/repository/dashboard'
 
 type RouteParams = { id: string }
 
@@ -88,28 +89,28 @@ async function recalcReservationForItem(
   itemId: number,
   userId: string | null
 ) {
-    const itemRes = await client.query(
-      `SELECT material_id, quantity, shortage_action
+  const itemRes = await client.query(
+    `SELECT material_id, quantity, shortage_action
        FROM order_items
        WHERE id = $1 AND order_id = $2`,
-      [itemId, orderId]
-    )
+    [itemId, orderId]
+  )
   if (itemRes.rowCount === 0) return
 
   const materialId = Number(itemRes.rows[0].material_id)
   const qtyRequested = Number(itemRes.rows[0].quantity ?? 0)
   const shortageAction = String(itemRes.rows[0].shortage_action ?? 'PRODUCE').toUpperCase()
 
-    const balRes = await client.query(
-      'SELECT COALESCE(on_hand,0) AS on_hand FROM stock_balances WHERE material_id = $1',
-      [materialId]
-    )
+  const balRes = await client.query(
+    'SELECT COALESCE(on_hand,0) AS on_hand FROM stock_balances WHERE material_id = $1',
+    [materialId]
+  )
   const onHand = Number(balRes.rows[0]?.on_hand ?? 0)
-    const otherRes = await client.query(
-      `SELECT COALESCE(SUM(qty),0) AS reserved
+  const otherRes = await client.query(
+    `SELECT COALESCE(SUM(qty),0) AS reserved
        FROM stock_reservations
        WHERE material_id = $1 AND order_id <> $2 AND expires_at > now()`,
-      [materialId, orderId]
+    [materialId, orderId]
   )
   const reservedOther = Number(otherRes.rows[0]?.reserved ?? 0)
   const available = Math.max(0, onHand - reservedOther)
@@ -406,11 +407,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
       await client.query('COMMIT')
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => { })
       throw err
     } finally {
       client.release()
     }
+
+    // Background refresh
+    invalidateDashboardCache().catch(console.error)
+    refreshDashboardSnapshot().catch(console.error)
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
@@ -426,6 +431,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
     await getPool().query('DELETE FROM order_items WHERE order_id = $1', [orderId])
     await getPool().query('DELETE FROM orders WHERE id = $1', [orderId])
+
+    // Background refresh
+    invalidateDashboardCache().catch(console.error)
+    refreshDashboardSnapshot().catch(console.error)
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {

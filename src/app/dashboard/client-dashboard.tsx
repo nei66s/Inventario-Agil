@@ -79,7 +79,7 @@ const parseBucketToDate = (label?: string | number) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const SEPARATION_STATUSES = new Set(['ABERTO', 'EM_PICKING', 'SAIDA_CONCLUIDA']);
+const SEPARATION_STATUSES = new Set(['EM_PICKING']);
 
 const isFinalizedStatus = (status?: string | null) => status === 'FINALIZADO' || status === 'SAIDA_CONCLUIDA';
 const isInSeparationStatus = (status?: string | null) => (status ? SEPARATION_STATUSES.has(status) : false);
@@ -161,21 +161,22 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   const orders = data.orders;
   const productionTasks = data.productionTasks;
 
-  const openOrders = orders.filter((item) => ['ABERTO', 'EM_PICKING'].includes(item.status)).length;
+  const activeOrders = orders.filter((o) => !o.trashedAt);
+  const openOrders = activeOrders.filter((item) => item.status === 'ABERTO').length;
   const tasksPending = productionTasks.filter((item) => item.status !== 'DONE').length;
   const unread = data.notifications.filter((item) => !item.readAt).length;
 
   const lowStock = stockView.filter((item) => item.material && item.available <= item.material.minStock);
   const recentOrders = useMemo(
     () =>
-      [...orders]
+      [...activeOrders]
         .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
         .slice(0, 6),
-    [orders]
+    [activeOrders]
   );
 
   const ordersBySellerMap: Record<string, number> = {};
-  orders.forEach((order) => {
+  activeOrders.forEach((order) => {
     const key = order.createdBy || 'Sem registro';
     ordersBySellerMap[key] = (ordersBySellerMap[key] || 0) + 1;
   });
@@ -185,7 +186,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   }));
 
   const ordersByPickerMap: Record<string, number> = {};
-  orders.forEach((order) => {
+  activeOrders.forEach((order) => {
     if (!order.pickerId) return;
     ordersByPickerMap[order.pickerId] = (ordersByPickerMap[order.pickerId] || 0) + 1;
   });
@@ -196,16 +197,16 @@ export default function DashboardClient({ data }: DashboardClientProps) {
 
   const ordersStatusCounts = useMemo(() => {
     const map: Record<string, number> = {};
-    orders.forEach((order) => {
+    activeOrders.forEach((order) => {
       map[order.status] = (map[order.status] || 0) + 1;
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [orders]);
+  }, [activeOrders]);
 
   const agingBuckets = useMemo(() => {
     const buckets = { '0-3': 0, '4-7': 0, '8-14': 0, '15+': 0 } as Record<string, number>;
     const now = Date.now();
-    orders.forEach((order) => {
+    activeOrders.forEach((order) => {
       const days = Math.floor((now - new Date(order.orderDate).getTime()) / (24 * 3600 * 1000));
       if (days <= 3) buckets['0-3']++;
       else if (days <= 7) buckets['4-7']++;
@@ -213,7 +214,7 @@ export default function DashboardClient({ data }: DashboardClientProps) {
       else buckets['15+']++;
     });
     return Object.entries(buckets).map(([bucket, value]) => ({ bucket, value }));
-  }, [orders]);
+  }, [activeOrders]);
 
   const gaugeRisk = useMemo(() => {
     const total = data.materials.length || 1;
@@ -236,14 +237,14 @@ export default function DashboardClient({ data }: DashboardClientProps) {
   const fulfillmentSeries = useMemo(
     () =>
       last14.map((date) => {
-        const ordersOnDay = orders.filter((order) => order.orderDate.slice(0, 10) === date);
+        const ordersOnDay = activeOrders.filter((order) => order.orderDate.slice(0, 10) === date);
         const finished = ordersOnDay.filter(
           (order) => order.status === 'FINALIZADO' || order.status === 'SAIDA_CONCLUIDA'
         ).length;
         const rate = ordersOnDay.length === 0 ? 0 : Math.round((finished / ordersOnDay.length) * 100);
         return { date, rate };
       }),
-    [last14, orders]
+    [last14, activeOrders]
   );
 
   const dateFmt = useMemo(() => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }), []);
@@ -296,8 +297,8 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     [productionTasks]
   );
 
-  const finishedCount = orders.filter((order) => isFinalizedStatus(order.status)).length;
-  const ordersInSeparation = orders.filter((order) => isInSeparationStatus(order.status)).length;
+  const finishedCount = activeOrders.filter((order) => isFinalizedStatus(order.status)).length;
+  const ordersInSeparation = activeOrders.filter((order) => isInSeparationStatus(order.status)).length;
   const ordersComparisonSeries = useMemo(() => {
     const buckets: string[] = [];
     if (period === 'month') {
@@ -324,14 +325,14 @@ export default function DashboardClient({ data }: DashboardClientProps) {
     return buckets.map((bucket) => {
       const ordersOnBucket =
         period === 'all'
-          ? orders.filter((order) => order.orderDate.slice(0, 7) === bucket)
-          : orders.filter((order) => order.orderDate.slice(0, 10) === bucket);
+          ? activeOrders.filter((order) => order.orderDate.slice(0, 7) === bucket)
+          : activeOrders.filter((order) => order.orderDate.slice(0, 10) === bucket);
       const created = ordersOnBucket.length;
       const inSeparation = ordersOnBucket.filter((order) => isInSeparationStatus(order.status)).length;
       const finalized = ordersOnBucket.filter((order) => isFinalizedStatus(order.status)).length;
       return { date: bucket, created, inSeparation, finalized };
     });
-  }, [orders, period, selectedMonth]);
+  }, [activeOrders, period, selectedMonth]);
 
   const formatBucketLabel = (label?: string | number) => {
     const parsed = parseBucketToDate(label);

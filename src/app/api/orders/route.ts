@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
+import { invalidateDashboardCache, refreshDashboardSnapshot } from '@/lib/repository/dashboard'
 
 type ApiOrder = {
   id: string
@@ -323,7 +324,7 @@ export async function POST(request: NextRequest) {
     }
     await query('UPDATE orders SET order_number = $1 WHERE id = $2', [orderNumber, orderId])
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       id: `O-${orderId}`,
       orderNumber,
       status: normalizeStatus(status),
@@ -340,6 +341,12 @@ export async function POST(request: NextRequest) {
       total: 0,
       trashedAt: null,
     })
+
+    // Background refresh
+    invalidateDashboardCache().catch(console.error)
+    refreshDashboardSnapshot().catch(console.error)
+
+    return response
   } catch (err: unknown) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
