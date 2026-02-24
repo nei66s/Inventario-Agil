@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { postReceipt } from '@/lib/receipt-helpers'
+import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message
@@ -31,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       })
       await client.query('COMMIT')
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => { })
       const msg = errorMessage(err)
       if (msg === 'Recebimento nao encontrado') {
         return NextResponse.json({ error: msg }, { status: 404 })
@@ -43,6 +44,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     } finally {
       client.release()
     }
+
+    // Invalidate dashboard cache
+    await invalidateDashboardCache()
+    await refreshDashboardSnapshot()
+    revalidateDashboardTag()
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {

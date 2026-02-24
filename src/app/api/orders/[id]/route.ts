@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { notifyOrderCompleted } from '@/lib/notifications'
-import { invalidateDashboardCache, refreshDashboardSnapshot } from '@/lib/repository/dashboard'
+import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
+import { logActivity } from '@/lib/log-activity'
+import { publishRealtimeEvent } from '@/lib/pubsub'
 
 type RouteParams = { id: string }
 
@@ -377,6 +379,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           },
           client
         )
+        // Log activity — pick completed
+        logActivity(auth.userId, 'PICK_COMPLETED', 'pick', orderId).catch(console.error)
+        await publishRealtimeEvent('PICKING_COMPLETED', { orderId })
       } else if (action === 'register_label_print') {
         await client.query('UPDATE orders SET label_print_count = COALESCE(label_print_count,0) + 1 WHERE id = $1', [
           orderId,
@@ -414,8 +419,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     // Background refresh
-    invalidateDashboardCache().catch(console.error)
-    refreshDashboardSnapshot().catch(console.error)
+    await invalidateDashboardCache()
+    await refreshDashboardSnapshot()
+    revalidateDashboardTag()
+
+    await publishRealtimeEvent('ORDER_UPDATED', { orderId, action })
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
@@ -433,8 +441,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     await getPool().query('DELETE FROM orders WHERE id = $1', [orderId])
 
     // Background refresh
-    invalidateDashboardCache().catch(console.error)
-    refreshDashboardSnapshot().catch(console.error)
+    await invalidateDashboardCache()
+    await refreshDashboardSnapshot()
+    revalidateDashboardTag()
+
+    await publishRealtimeEvent('ORDER_DELETED', { orderId })
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {

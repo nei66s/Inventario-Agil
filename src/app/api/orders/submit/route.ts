@@ -6,6 +6,9 @@ import {
   notifyOrderStage,
   notifyProductionTaskCreated,
 } from '@/lib/notifications'
+import { logActivity } from '@/lib/log-activity'
+import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
+import { publishRealtimeEvent } from '@/lib/pubsub'
 
 type ItemPayload = {
   materialId: number
@@ -64,12 +67,12 @@ export async function POST(request: NextRequest) {
         // if still null, try lookup by sku or exact id string
         if (!materialIdNum) {
           try {
-        const r = await getPool().query('SELECT id FROM materials WHERE sku=$1 OR name=$1 LIMIT 1', [it.materialId])
-        if (r.rowCount > 0) {
-          const lookupRow = r.rows[0] as MaterialLookupRow
-          materialIdNum = Number(lookupRow.id)
-        }
-          } catch {}
+            const r = await getPool().query('SELECT id FROM materials WHERE sku=$1 OR name=$1 LIMIT 1', [it.materialId])
+            if (r.rowCount > 0) {
+              const lookupRow = r.rows[0] as MaterialLookupRow
+              materialIdNum = Number(lookupRow.id)
+            }
+          } catch { }
         }
       }
 
@@ -109,9 +112,9 @@ export async function POST(request: NextRequest) {
       const materialDescriptionCache = new Map<number, string | null>()
       const resolveMaterialDescription = async (materialId: number) => {
         if (!materialDescriptionCache.has(materialId)) {
-        const matRes = await client.query('SELECT description FROM materials WHERE id = $1', [materialId])
-        const matRow = matRes.rows[0] as MaterialDescriptionRow | undefined
-        materialDescriptionCache.set(materialId, matRow?.description ?? null)
+          const matRes = await client.query('SELECT description FROM materials WHERE id = $1', [materialId])
+          const matRow = matRes.rows[0] as MaterialDescriptionRow | undefined
+          materialDescriptionCache.set(materialId, matRow?.description ?? null)
         }
         return materialDescriptionCache.get(materialId) ?? null
       }
@@ -193,14 +196,14 @@ export async function POST(request: NextRequest) {
 
       // compute daily sequence for orderNumber (transactional, then persist)
       const createdAtInserted = orderRes.rows[0].created_at ?? new Date().toISOString()
-      const dateStr = new Date(createdAtInserted).toISOString().slice(0,10) // YYYY-MM-DD
+      const dateStr = new Date(createdAtInserted).toISOString().slice(0, 10) // YYYY-MM-DD
       const dateKey = dateStr.replace(/-/g, '') // YYYYMMDD
       const sameDayRes = await client.query('SELECT id FROM orders WHERE created_at::date = $1::date ORDER BY created_at ASC', [dateStr])
       const sameDayRows = sameDayRes.rows as OrderIdRow[]
       const ids = sameDayRows.map((r) => Number(r.id))
       const pos = ids.indexOf(orderId)
       const seq = pos >= 0 ? (pos + 1) : (ids.length)
-      const orderNumber = `${dateKey}${String(seq).padStart(2,'0')}`
+      const orderNumber = `${dateKey}${String(seq).padStart(2, '0')}`
 
       await client.query('UPDATE orders SET order_number = $1 WHERE id = $2', [orderNumber, orderId])
 
@@ -292,6 +295,16 @@ export async function POST(request: NextRequest) {
       }
       await client.query('COMMIT')
 
+      // Invalidate dashboard cache
+      await invalidateDashboardCache()
+      await refreshDashboardSnapshot()
+      revalidateDashboardTag()
+
+      await publishRealtimeEvent('ORDER_SUBMITTED', { orderId })
+
+      // Log activity — order created with items
+      logActivity(auth.userId, 'ORDER_CREATED', 'order', orderId, items.length).catch(console.error)
+
       // Fetch created order and items
       const createdRes = await getPool().query(
         `SELECT o.id, o.order_number, o.status, o.total, o.created_at, oi.id AS item_id, oi.material_id, oi.conditions, m.sku, m.name AS material_name, oi.quantity, oi.unit_price
@@ -308,7 +321,7 @@ export async function POST(request: NextRequest) {
       // compute daily sequence for orderNumber
       const order = {
         id: `O-${orderId}`,
-        orderNumber: createdRes.rows[0]?.order_number ?? `${new Date(createdAt).toISOString().slice(0,10).replace(/-/g,'')}${String(1).padStart(2,'0')}`,
+        orderNumber: createdRes.rows[0]?.order_number ?? `${new Date(createdAt).toISOString().slice(0, 10).replace(/-/g, '')}${String(1).padStart(2, '0')}`,
         status: rows[0]?.status ?? (payload.status ?? 'draft'),
         total: Number(rows[0]?.total ?? total),
         createdAt: createdAt,
@@ -325,7 +338,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(order, { status: 201 })
     } catch (err) {
-      await client.query('ROLLBACK').catch(() => {})
+      await client.query('ROLLBACK').catch(() => { })
       throw err
     } finally {
       client.release()

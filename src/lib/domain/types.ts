@@ -218,6 +218,18 @@ export type MetricDaily = {
   picksCompleted: number;
 };
 
+export type InventoryAdjustment = {
+  id: string;
+  materialId: string;
+  materialName?: string;
+  qtyBefore: number;
+  qtyAfter: number;
+  adjustmentQty: number;
+  reason: string;
+  actor: string;
+  createdAt: string;
+};
+
 export type PilotDb = {
   users: User[];
   clients: Client[];

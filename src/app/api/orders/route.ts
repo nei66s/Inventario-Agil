@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
-import { invalidateDashboardCache, refreshDashboardSnapshot } from '@/lib/repository/dashboard'
+import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
+import { logActivity } from '@/lib/log-activity'
+import { publishRealtimeEvent } from '@/lib/pubsub'
 
 type ApiOrder = {
   id: string
@@ -343,8 +345,14 @@ export async function POST(request: NextRequest) {
     })
 
     // Background refresh
-    invalidateDashboardCache().catch(console.error)
-    refreshDashboardSnapshot().catch(console.error)
+    await invalidateDashboardCache()
+    await refreshDashboardSnapshot()
+    revalidateDashboardTag()
+
+    await publishRealtimeEvent('ORDER_CREATED', { orderId })
+
+    // Log activity
+    logActivity(auth.userId, 'ORDER_CREATED', 'order', orderId).catch(console.error)
 
     return response
   } catch (err: unknown) {

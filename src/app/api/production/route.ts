@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { notifyProductionTaskCreated } from '@/lib/notifications'
+import { publishRealtimeEvent } from '@/lib/pubsub'
 
 type DbRow = {
   id: number
@@ -18,6 +19,7 @@ type DbRow = {
   conditions?: string | { key: string; value: string }[] | null
   produced_qty?: string | number | null
   produced_weight?: string | number | null
+  label_printed: boolean
 }
 
 function parseJson<T>(value: unknown, fallback: T): T {
@@ -49,6 +51,7 @@ function toApiTask(row: DbRow) {
     conditions: parseJson(row.conditions, []),
     producedQty: row.produced_qty !== null ? Number(row.produced_qty) : undefined,
     producedWeight: row.produced_weight !== null ? Number(row.produced_weight) : undefined,
+    labelPrinted: row.label_printed,
   }
 }
 
@@ -68,6 +71,7 @@ export async function GET() {
          pt.status,
          pt.produced_qty,
          pt.produced_weight,
+         pt.label_printed,
          pt.created_at,
          pt.updated_at,
        o.order_number,
@@ -121,7 +125,7 @@ export async function POST(request: Request) {
            ELSE 'PENDING'
          END,
          updated_at = now()
-       RETURNING id, order_id, material_id, qty_to_produce, status, created_at, updated_at,
+       RETURNING id, order_id, material_id, qty_to_produce, status, produced_qty, produced_weight, label_printed, created_at, updated_at,
          (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
          (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
         (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name,
@@ -197,6 +201,8 @@ export async function POST(request: Request) {
         qty: createdQty,
       })
     }
+
+    await publishRealtimeEvent('PRODUCTION_TASK_CREATED', { orderId, materialId })
 
     return NextResponse.json(toApiTask(createdRow), { status: 201 })
   } catch (err: unknown) {

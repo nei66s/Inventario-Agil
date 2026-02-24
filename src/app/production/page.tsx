@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Factory, Star, FileText } from 'lucide-react';
+import { Factory, Star, FileText, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,6 +47,7 @@ type ProductionTask = {
   conditions?: { key: string; value: string }[];
   producedQty?: number;
   producedWeight?: number;
+  labelPrinted?: boolean;
 };
 
 function errorMessage(err: unknown): string {
@@ -105,19 +106,14 @@ export default function ProductionPage() {
     loadTasks();
   }, [loadTasks]);
 
-  React.useEffect(() => {
-    const id = window.setInterval(() => {
-      loadTasks({ skipLoading: true });
-    }, 15000);
-    return () => window.clearInterval(id);
-  }, [loadTasks]);
+
 
   const tasks = React.useMemo(() => {
     return [...serverTasks].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [serverTasks]);
 
-  const activeTasks = React.useMemo(() => tasks.filter((task) => task.status === 'PENDING'), [tasks]);
-  const historyTasks = React.useMemo(() => tasks.filter((task) => task.status !== 'PENDING'), [tasks]);
+  const activeTasks = React.useMemo(() => tasks.filter((task) => task.status !== 'DONE'), [tasks]);
+  const historyTasks = React.useMemo(() => tasks.filter((task) => task.status === 'DONE'), [tasks]);
 
   const mutateTask = async (taskId: string, action: 'start' | 'complete') => {
     try {
@@ -127,7 +123,10 @@ export default function ProductionPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        throw new Error(data.error || `Erro HTTP ${res.status}`);
+      }
       await loadTasks({ skipLoading: true });
     } catch (err: unknown) {
       setError(errorMessage(err) || 'Falha ao atualizar tarefa');
@@ -206,6 +205,16 @@ export default function ProductionPage() {
         body: JSON.stringify({ action: 'register_label_print', format: 'PRODUCTION_4x4' }),
       });
       if (!res.ok) throw new Error(`Falha ao registrar etiqueta (${res.status})`);
+
+      // Also register label print on the specific production task
+      const taskRes = await fetch(`/api/production/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register_label_print' }),
+      });
+      if (!taskRes.ok) throw new Error(`Falha ao registrar etiqueta na tarefa (${taskRes.status})`);
+
+      await loadTasks({ skipLoading: true });
     } catch (err: unknown) {
       setError(errorMessage(err) || 'Falha ao imprimir etiqueta');
     } finally {
@@ -274,18 +283,24 @@ export default function ProductionPage() {
           <Button
             size="sm"
             disabled={task.status === 'DONE' || busyTaskId === task.id}
-            onClick={() => mutateTask(task.id, 'complete')}
+            onClick={() => {
+              if (!task.labelPrinted) {
+                setError('Você deve imprimir a etiqueta antes de concluir.');
+                return;
+              }
+              mutateTask(task.id, 'complete');
+            }}
           >
             Concluir
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant={task.labelPrinted ? "outline" : "default"}
             disabled={busyLabelTaskId === task.id || busyTaskId === task.id}
             onClick={() => handlePrintProductionLabel(task)}
           >
             <FileText className="mr-1 h-3 w-3" />
-            Etiqueta 4x4
+            {task.labelPrinted ? 'Reimprimir' : 'Imprimir'} Etiqueta
           </Button>
         </div>
       </TableCell>
@@ -302,7 +317,11 @@ export default function ProductionPage() {
               Tarefas de producao persistidas no banco. Concluir reserva automaticamente o estoque produzido por 5 minutos antes de liberar para o picking.
             </CardDescription>
           </div>
-          <p className="text-xs text-muted-foreground">Dados atualizados automaticamente.</p>
+          <p className="text-xs text-muted-foreground">Dados atualizados sob demanda.</p>
+          <Button size="sm" variant="outline" onClick={() => loadTasks({ skipLoading: true })} disabled={loading}>
+            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
         </div>
       </CardHeader>
       {error ? (

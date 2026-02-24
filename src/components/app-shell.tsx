@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   AreaChart,
@@ -18,6 +18,12 @@ import {
   Sun,
   Warehouse,
   Trash2,
+  ClipboardList,
+  BookmarkCheck,
+  Bell,
+  Zap,
+  Users,
+  TrendingUp,
 } from 'lucide-react';
 
 import {
@@ -32,6 +38,9 @@ import {
   SidebarMenuButton,
   SidebarTrigger,
   SidebarInset,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { Button } from './ui/button';
@@ -56,15 +65,17 @@ const navItems = [
   { href: '/orders', icon: ShoppingCart, label: 'Pedidos' },
   { href: '/orders/trash', icon: Trash2, label: 'Lixeira' },
   { href: '/materials', icon: Bot, label: 'Materiais' },
-  { href: '/inventory', icon: Warehouse, label: 'Estoque' },
   { href: '/production', icon: Factory, label: 'Producao' },
   { href: '/report', icon: FileText, label: 'Relatório' },
   { href: '/picking', icon: PackageCheck, label: 'Separacao' },
   { href: '/admin', icon: Shield, label: 'Administracao' },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentTab = searchParams.get('tab') || 'stock';
+  const currentDashTab = searchParams.get('tab') || 'business';
   const [mounted, setMounted] = React.useState(false);
   const [theme, setTheme] = React.useState<'light' | 'dark'>('light');
   const { user: authUser } = useAuthUser();
@@ -105,6 +116,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     } catch { }
   }, [theme]);
 
+  // Use currentTab for active state in sidebar sub-links
+  const isInventoryActive = pathname.startsWith('/inventory');
+  const isDashboardActive = pathname.startsWith('/dashboard');
+
   return (
     <div className="relative min-h-svh w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {/* Global Abstract Backgrounds */}
@@ -125,13 +140,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <SidebarGroup className="p-1">
                 <SidebarGroupLabel>Indicadores</SidebarGroupLabel>
                 <SidebarMenu>
-                  <SidebarMenuItem key="/dashboard">
-                    <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard')} tooltip="Indicadores">
-                      <Link href="/dashboard">
-                        <AreaChart />
-                        <span>Indicadores</span>
-                      </Link>
-                    </SidebarMenuButton>
+                  <SidebarMenuItem>
+                    <div className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground/70 select-none">
+                      <AreaChart className="h-4 w-4" />
+                      <span>Indicadores</span>
+                    </div>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isDashboardActive && currentDashTab === 'business'}>
+                          <Link href="/dashboard?tab=business" className="flex items-center gap-2">
+                            <TrendingUp className="h-3.5 w-3.5" />
+                            <span>Negócio</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isDashboardActive && currentDashTab === 'people'}>
+                          <Link href="/dashboard?tab=people" className="flex items-center gap-2">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>Pessoas</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroup>
@@ -155,14 +186,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroup>
 
-                  <SidebarMenuItem key="/mrp">
-                    <SidebarMenuButton asChild isActive={pathname.startsWith('/mrp')} tooltip="Planejamento de Materiais">
-                      <Link href="/mrp">
-                        <AreaChart />
-                        <span>Planejamento de Materiais</span>
-                      </Link>
-                    </SidebarMenuButton>
+              <SidebarGroup className="p-1 pt-4">
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <div className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground/70 select-none">
+                      <Warehouse className="h-4 w-4" />
+                      <span>Gestão de estoque</span>
+                    </div>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'stock'}>
+                          <Link href="/inventory?tab=stock" className="flex items-center gap-2">
+                            <Warehouse className="h-3.5 w-3.5" />
+                            <span>Estoque</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'adjust'}>
+                          <Link href="/inventory?tab=adjust" className="flex items-center gap-2">
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            <span>Ajustes</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'reservations'}>
+                          <Link href="/inventory?tab=reservations" className="flex items-center gap-2">
+                            <BookmarkCheck className="h-3.5 w-3.5" />
+                            <span>Reservas</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'inbox'}>
+                          <Link href="/inventory?tab=inbox" className="flex items-center gap-2">
+                            <Bell className="h-3.5 w-3.5" />
+                            <span>Inbox</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'mrp'}>
+                          <Link href="/inventory?tab=mrp" className="flex items-center gap-2">
+                            <Zap className="h-3.5 w-3.5" />
+                            <span>Planejamento MRP</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
                   </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroup>
@@ -221,7 +296,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarTrigger className="lg:hidden" />
 
             <h1 className="min-w-0 flex-1 truncate text-lg font-bold font-headline tracking-tight text-slate-800 dark:text-slate-200">
-              {navItems.find((item) => pathname.startsWith(item.href))?.label ?? 'Inventário Ágil'}
+              {navItems.find((item) => pathname.startsWith(item.href))?.label ?? (isInventoryActive ? 'Estoque' : 'Inventário Ágil')}
             </h1>
 
             <div className="hidden flex-1 md:flex md:justify-center">
@@ -287,5 +362,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </SidebarInset>
       </SidebarProvider>
     </div>
+  );
+}
+
+export function AppShell(props: { children: React.ReactNode }) {
+  return (
+    <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center p-8 text-muted-foreground">Carregando interface...</div>}>
+      <AppShellContent {...props} />
+    </React.Suspense>
   );
 }

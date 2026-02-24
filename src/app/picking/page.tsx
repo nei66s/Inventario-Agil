@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { FileText, PackageCheck } from 'lucide-react';
+import { FileText, PackageCheck, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +23,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Order, StockBalance, User } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type LoadPickingOptions = {
   skipLoading?: boolean;
@@ -71,7 +84,10 @@ export default function PickingPage() {
         users: nextUsers,
         stockBalances: nextStockBalances,
       });
-      if (nextFingerprint !== dataFingerprintRef.current) {
+
+      const isTyping = document.activeElement?.tagName === 'INPUT';
+
+      if (nextFingerprint !== dataFingerprintRef.current && !isTyping) {
         dataFingerprintRef.current = nextFingerprint;
         setOrders(nextOrders);
         setUsers(nextUsers);
@@ -92,12 +108,7 @@ export default function PickingPage() {
     loadData();
   }, [loadData]);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      loadData({ skipLoading: true });
-    }, 15000);
-    return () => window.clearInterval(id);
-  }, [loadData]);
+
 
   const queue = orders
     .filter((order) => ['EM_PICKING', 'ABERTO', 'SAIDA_CONCLUIDA'].includes(order.status))
@@ -137,11 +148,11 @@ export default function PickingPage() {
         order.id !== orderId
           ? order
           : {
-              ...order,
-              items: order.items.map((item) =>
-                item.id !== itemId ? item : { ...item, qtySeparated: qty }
-              ),
-            }
+            ...order,
+            items: order.items.map((item) =>
+              item.id !== itemId ? item : { ...item, qtySeparated: qty }
+            ),
+          }
       )
     );
   };
@@ -152,11 +163,11 @@ export default function PickingPage() {
         order.id !== orderId
           ? order
           : {
-              ...order,
-              items: order.items.map((item) =>
-                item.id !== itemId ? item : { ...item, separatedWeight: weight }
-              ),
-            }
+            ...order,
+            items: order.items.map((item) =>
+              item.id !== itemId ? item : { ...item, separatedWeight: weight }
+            ),
+          }
       )
     );
   };
@@ -192,15 +203,27 @@ export default function PickingPage() {
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Fila de picking</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-headline">Fila de picking</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => loadData({ skipLoading: true })} disabled={loading}>
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
           <CardDescription>Filtre por prontidao e conclua separacao com baixa de saida simulada.</CardDescription>
-          <Tabs value={filter} onValueChange={(value) => setFilter(value as 'READY_FULL' | 'READY_PARTIAL' | 'ALL')}>
-            <TabsList className="w-full">
-              <TabsTrigger value="ALL">Todos</TabsTrigger>
-              <TabsTrigger value="READY_FULL">{readinessTabLabel.READY_FULL}</TabsTrigger>
-              <TabsTrigger value="READY_PARTIAL">{readinessTabLabel.READY_PARTIAL}</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Filtro de prontidão</Label>
+            <Select value={filter} onValueChange={(value) => setFilter(value as 'READY_FULL' | 'READY_PARTIAL' | 'ALL')}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Filtrar por status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="READY_FULL">{readinessTabLabel.READY_FULL}</SelectItem>
+                <SelectItem value="READY_PARTIAL">{readinessTabLabel.READY_PARTIAL}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {queue.length === 0 ? (
@@ -210,10 +233,13 @@ export default function PickingPage() {
               <button
                 key={order.id}
                 onClick={() => setSelectedOrderId(order.id)}
-                className={`w-full rounded-xl border border-border/70 bg-muted/20 p-3 text-left transition hover:border-primary sm:p-4 ${selectedOrderId === order.id ? 'border-primary bg-primary/5' : ''}`}
+                className={`w-full rounded-xl border border-border/70 bg-muted/20 p-2 text-left transition hover:border-primary sm:p-3 ${selectedOrderId === order.id ? 'border-primary bg-primary/5' : ''}`}
               >
-                <p className="font-medium">{order.orderNumber}</p>
-                <p className="text-xs text-muted-foreground">{order.clientName} - {formatDate(order.orderDate)}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate font-medium" title={order.orderNumber}>{order.orderNumber}</p>
+                  {order.labelPrintCount > 0 && <Badge variant="outline" className="h-5 px-1.5 text-[10px]">LBL</Badge>}
+                </div>
+                <p className="truncate text-xs text-muted-foreground" title={order.clientName}>{order.clientName} - {formatDate(order.orderDate)}</p>
                 <div className="mt-2 flex gap-2">
                   <Badge variant="outline">{order.status}</Badge>
                   <Badge variant={order.readiness === 'READY_FULL' ? 'positive' : order.readiness === 'READY_PARTIAL' ? 'warning' : 'outline'}>
@@ -241,10 +267,28 @@ export default function PickingPage() {
                   {
                     (() => {
                       const hasProductionBlocking = selected.items.some((it) => it.qtyToProduce > 0);
+                      const isLabelPrinted = (selected.labelPrintCount ?? 0) > 0;
+                      const isFullyTyped = selected.items.every(item => item.qtySeparated >= item.qtyReservedFromStock);
+                      const canConclude = isLabelPrinted && isFullyTyped && !hasProductionBlocking;
+
                       return (
                         <>
-                          <Button className="w-full sm:w-auto" variant="outline" onClick={handlePrintLabels} disabled={hasProductionBlocking}><FileText className="mr-2 h-4 w-4" />Imprimir etiquetas</Button>
-                          <Button className="w-full sm:w-auto" onClick={() => concludePicking(selected.id)} disabled={hasProductionBlocking}>Concluir picking</Button>
+                          <Button
+                            className="w-full sm:w-auto"
+                            variant="outline"
+                            onClick={handlePrintLabels}
+                            disabled={hasProductionBlocking}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            {isLabelPrinted ? 'Reimprimir etiquetas' : 'Imprimir etiquetas'}
+                          </Button>
+                          <Button
+                            className="w-full sm:w-auto"
+                            onClick={() => concludePicking(selected.id)}
+                            disabled={!canConclude}
+                          >
+                            {isFullyTyped ? 'Concluir picking' : 'Aguardando quantidades'}
+                          </Button>
                         </>
                       )
                     })()
@@ -256,9 +300,9 @@ export default function PickingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                <TableHead>Material</TableHead>
-                <TableHead>Desc</TableHead>
-                <TableHead>Cor</TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Desc</TableHead>
+                    <TableHead>Cor</TableHead>
                     <TableHead className="text-right">Peso</TableHead>
                     <TableHead className="text-right">Qtd. solicitada</TableHead>
                     <TableHead className="text-right">Qtd. reservada</TableHead>
@@ -272,42 +316,70 @@ export default function PickingPage() {
                     return (
                       <React.Fragment key={item.id}>
                         <TableRow>
-                  <TableCell>
-                    <p className="font-medium">{item.materialName}</p>
-                    <p className="text-xs text-muted-foreground">{item.uom}</p>
-                    {item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0 ? (
+                          <TableCell className="max-w-[120px]">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <p className="truncate font-medium">{item.materialName}</p>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{item.materialName}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <p className="text-[10px] text-muted-foreground">{item.uom}</p>
+                            {item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0 ? (
                               <div className="mt-1">
                                 <Badge variant="outline">Em produção</Badge>
                               </div>
                             ) : null}
-                  </TableCell>
-                  <TableCell className="text-left text-sm text-muted-foreground">{item.description ?? item.materialName}</TableCell>
-                  <TableCell className="text-left text-sm text-muted-foreground">{item.color}</TableCell>
-                  <TableCell className="text-right">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      className="ml-auto w-full max-w-[7rem] text-right"
-                      value={item.separatedWeight ?? ''}
-                      onChange={(e) => updateSeparatedWeightLocal(selected.id, item.id, Number(e.target.value))}
-                      onBlur={(e) => commitSeparatedWeight(selected.id, item.id, Number(e.target.value))}
-                    />
-                  </TableCell>
+                          </TableCell>
+                          <TableCell className="text-left text-sm text-muted-foreground">{item.description ?? item.materialName}</TableCell>
+                          <TableCell className="text-left text-sm text-muted-foreground">{item.color}</TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              id={`weight-${item.id}`}
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              className="ml-auto w-full max-w-[5.5rem] text-right"
+                              value={item.separatedWeight ?? ''}
+                              onChange={(e) => updateSeparatedWeightLocal(selected.id, item.id, Number(e.target.value))}
+                              onBlur={(e) => commitSeparatedWeight(selected.id, item.id, Number(e.target.value))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  document.getElementById(`qty-${item.id}`)?.focus();
+                                }
+                              }}
+                            />
+                          </TableCell>
                           <TableCell className="text-right">{item.qtyRequested}</TableCell>
                           <TableCell className="text-right">{item.qtyReservedFromStock}</TableCell>
                           <TableCell className="text-right">{currentStock?.onHand ?? 0}</TableCell>
                           <TableCell className="text-right">
                             <Input
+                              id={`qty-${item.id}`}
                               type="number"
                               min={0}
                               max={item.qtyReservedFromStock}
-                              className="ml-auto w-full max-w-[7rem] text-right"
+                              className="ml-auto w-full max-w-[5.5rem] text-right font-bold"
                               value={item.qtySeparated}
                               onChange={(e) => updateSeparatedQtyLocal(selected.id, item.id, Number(e.target.value))}
                               onBlur={(e) => commitSeparatedQty(selected.id, item.id, Number(e.target.value))}
                               readOnly={item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0}
                               disabled={item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  // Focus next item's weight
+                                  const itemIdx = selected.items.findIndex(it => it.id === item.id);
+                                  const nextItem = selected.items[itemIdx + 1];
+                                  if (nextItem) {
+                                    document.getElementById(`weight-${nextItem.id}`)?.focus();
+                                  }
+                                }
+                              }}
                             />
                           </TableCell>
                         </TableRow>

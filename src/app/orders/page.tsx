@@ -257,13 +257,19 @@ export default function OrdersPage() {
     }
     if (!order.items || order.items.length === 0) {
       errors.push('Adicione ao menos um item.');
+    } else {
+      order.items.forEach((item, idx) => {
+        if (Number(item.qtyRequested) <= 0) {
+          errors.push(`Item ${idx + 1}: Quantidade maior que zero.`);
+        }
+        if (!item.color || item.color.trim().length === 0) {
+          errors.push(`Item ${idx + 1}: Cor obrigatória.`);
+        }
+      });
     }
-    const invalidQty = (order.items || []).filter((item) => Number(item.qtyRequested) <= 0);
-    if (invalidQty.length > 0) {
-      errors.push('Quantidade precisa ser maior que zero.');
-    }
+
     if (errors.length > 0) {
-      toast({ title: 'Nao foi possivel enviar', description: errors.join(' '), variant: 'destructive' });
+      toast({ title: 'Campos obrigatórios', description: errors.join(' '), variant: 'destructive' });
       return;
     }
 
@@ -613,10 +619,11 @@ export default function OrdersPage() {
             <CardContent className="space-y-4">
               <div className="flex justify-end">
                 <Button
+                  id="btn-create-order"
                   variant="secondary"
                   onClick={() => selectedOrder && submitOrder(selectedOrder)}
                   disabled={selectedOrder.status !== 'RASCUNHO' || isSubmitting}
-                  className="w-full font-semibold sm:w-auto sm:min-w-[160px]"
+                  className="w-full font-semibold sm:w-auto sm:min-w-[160px] focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
                 >
                   {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                   {isSubmitting ? 'Enviando...' : 'Criar pedido'}
@@ -624,20 +631,40 @@ export default function OrdersPage() {
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <Label>Cliente</Label>
+                  <Label>Cliente <span className="text-destructive">*</span></Label>
                   <Input
+                    id="order-client-name"
                     value={selectedOrder.clientName}
                     onChange={(e) => updateOrderClientName(selectedOrder.id, e.target.value)}
                     onBlur={(e) => persistOrderClientName(selectedOrder.id, e.target.value)}
-                    placeholder="Digite o nome do cliente"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        // Focus the first item qty if it exists
+                        if (selectedOrder.items.length > 0) {
+                          document.getElementById(`qty-${selectedOrder.items[0].id}`)?.focus();
+                        }
+                      }
+                    }}
+                    placeholder="Nome do cliente"
                   />
                 </div>
                 <div>
-                  <Label>Data de entrega</Label>
+                  <Label>Entrega</Label>
                   <Input
                     type="date"
+                    className="w-[140px]"
                     value={selectedOrder.dueDate.slice(0, 10)}
-                    onChange={(e) => updateOrderMeta(selectedOrder.id, { dueDate: `${e.target.value}T12:00:00.000Z` })}
+                    onChange={(e) => {
+                      const val = `${e.target.value}T12:00:00.000Z`;
+                      setDb((prev) => ({
+                        ...prev,
+                        orders: prev.orders.map((o) =>
+                          o.id === selectedOrder.id ? { ...o, dueDate: val } : o
+                        ),
+                      }));
+                    }}
+                    onBlur={(e) => updateOrderMeta(selectedOrder.id, { dueDate: `${e.target.value}T12:00:00.000Z` })}
                   />
                 </div>
                 <div>
@@ -645,8 +672,19 @@ export default function OrdersPage() {
                   <Input
                     type="number"
                     min={1}
+                    className="w-[80px]"
                     value={selectedOrder.volumeCount}
-                    onChange={(e) => updateOrderMeta(selectedOrder.id, { volumeCount: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setDb((prev) => ({
+                        ...prev,
+                        orders: prev.orders.map((o) =>
+                          o.id === selectedOrder.id ? { ...o, volumeCount: val } : o
+                        ),
+                      }));
+                    }}
+                    onBlur={(e) => updateOrderMeta(selectedOrder.id, { volumeCount: Number(e.target.value) })}
+                    onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                   />
                 </div>
               </div>
@@ -671,16 +709,16 @@ export default function OrdersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Material</TableHead>
-                      <TableHead className="text-right">Qtd. solicitada</TableHead>
-                      <TableHead>Faltante</TableHead>
-                      <TableHead className="text-right">Em estoque</TableHead>
-                      <TableHead className="text-right">Reservado (outros pedidos)</TableHead>
-                      <TableHead className="text-right">Disponivel para este pedido</TableHead>
-                      <TableHead className="text-right">Qtd. reservada (estoque)</TableHead>
-                      <TableHead className="text-right">Qtd. para produzir</TableHead>
-                      <TableHead>Cor</TableHead>
-                      <TableHead className="text-center">Ações</TableHead>
+                      <TableHead className="w-[180px]">Material</TableHead>
+                      <TableHead className="text-right w-[90px]" title="Quantidade solicitada">Qtd. Sol.</TableHead>
+                      <TableHead className="w-[110px]" title="Ação de falta de estoque">Ação</TableHead>
+                      <TableHead className="text-right w-[70px]" title="Quantidade em estoque">Estoque</TableHead>
+                      <TableHead className="text-right w-[80px]" title="Reservado por outros pedidos">Reserv. (Outros)</TableHead>
+                      <TableHead className="text-right w-[100px] leading-tight" title="Disponível para este pedido">Disp. P/</TableHead>
+                      <TableHead className="text-right w-[90px] leading-tight" title="Quantidade reservada do estoque">Qtd. Res. (Est.)</TableHead>
+                      <TableHead className="text-right w-[90px] leading-tight" title="Quantidade para produzir">Qtd. Prod.</TableHead>
+                      <TableHead className="w-[100px]">Cor</TableHead>
+                      <TableHead className="text-center w-[50px]">Atos</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -712,6 +750,7 @@ export default function OrdersPage() {
                               {/* `Cor` column removed; prefer item.conditions for color */}
                               <TableCell className="text-right">
                                 <Input
+                                  id={`qty-${item.id}`}
                                   type="number"
                                   value={item.qtyRequested}
                                   onChange={(e) => {
@@ -720,11 +759,14 @@ export default function OrdersPage() {
                                     updateOrderItemField(selectedOrder.id, item.id, {
                                       qtyRequested: Number.isFinite(qty) ? qty : 0,
                                     });
-                                    if (raw !== '' && Number.isFinite(qty)) {
-                                      onQtyBlurReserve(selectedOrder.id, item.id, qty);
-                                    }
                                   }}
                                   onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value || 0))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      document.getElementById(`color-${item.id}`)?.focus();
+                                    }
+                                  }}
                                   className="ml-auto w-full max-w-[7rem] text-right"
                                 />
                               </TableCell>
@@ -754,10 +796,25 @@ export default function OrdersPage() {
                               </TableCell>
                               <TableCell>
                                 <Input
+                                  id={`color-${item.id}`}
                                   placeholder="Cor"
                                   value={item.color ?? ''}
                                   onChange={(e) => updateOrderItemField(selectedOrder.id, item.id, { color: e.target.value })}
                                   onBlur={(e) => persistOrderItemField(selectedOrder.id, item.id, { color: String(e.target.value ?? '') })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const btn = document.getElementById('btn-create-order');
+                                      if (btn) {
+                                        btn.focus();
+                                        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      }
+                                      toast({
+                                        title: 'Item pronto!',
+                                        description: 'Agora clique em "Criar pedido" para finalizar.',
+                                      });
+                                    }
+                                  }}
                                   className="w-full max-w-[7rem]"
                                 />
                               </TableCell>
@@ -778,12 +835,53 @@ export default function OrdersPage() {
                                           <Input
                                             placeholder="Campo (ex: Cor)"
                                             value={cond.key}
-                                            onChange={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: e.target.value })}
+                                            onChange={(e) => {
+                                              const nextVal = e.target.value;
+                                              setDb((prev) => ({
+                                                ...prev,
+                                                orders: prev.orders.map((o) => {
+                                                  if (o.id !== selectedOrder.id) return o;
+                                                  return {
+                                                    ...o,
+                                                    items: o.items.map((it) => {
+                                                      if (it.id !== item.id) return it;
+                                                      const nextConditions = [...(it.conditions || [])];
+                                                      if (nextConditions[idx]) {
+                                                        nextConditions[idx] = { ...nextConditions[idx], key: nextVal };
+                                                      }
+                                                      return { ...it, conditions: nextConditions };
+                                                    }),
+                                                  };
+                                                }),
+                                              }));
+                                            }}
+                                            onBlur={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: e.target.value })}
+                                            className="h-8"
                                           />
                                           <Input
                                             placeholder="Valor (ex: Vermelho)"
                                             value={cond.value}
-                                            onChange={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: e.target.value })}
+                                            onChange={(e) => {
+                                              const nextVal = e.target.value;
+                                              setDb((prev) => ({
+                                                ...prev,
+                                                orders: prev.orders.map((o) => {
+                                                  if (o.id !== selectedOrder.id) return o;
+                                                  return {
+                                                    ...o,
+                                                    items: o.items.map((it) => {
+                                                      if (it.id !== item.id) return it;
+                                                      const nextConditions = [...(it.conditions || [])];
+                                                      if (nextConditions[idx]) {
+                                                        nextConditions[idx] = { ...nextConditions[idx], value: nextVal };
+                                                      }
+                                                      return { ...it, conditions: nextConditions };
+                                                    }),
+                                                  };
+                                                }),
+                                              }));
+                                            }}
+                                            onBlur={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: e.target.value })}
                                           />
                                           <Button variant="ghost" onClick={() => removeItemCondition(selectedOrder.id, item.id, idx)}>
                                             <Trash2 className="h-4 w-4" />

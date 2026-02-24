@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache'
+import { revalidateTag, unstable_cache } from 'next/cache'
 import { query } from '../db'
 import { getJsonCache, invalidateCache, setJsonCache } from '../cache'
 import { logRepoPerf, perfEnabled } from './perf'
@@ -557,9 +557,17 @@ async function loadDashboardSnapshot(): Promise<DashboardData> {
 
 export const getDashboardSnapshot = unstable_cache(
   async () => loadDashboardSnapshot(),
-  [],
-  { revalidate: 15 }
+  ['dashboard'],
+  { tags: ['dashboard'] }
 )
+
+export function revalidateDashboardTag() {
+  try {
+    revalidateTag('dashboard')
+  } catch (e) {
+    console.error('[dashboard] revalidateTag failed', e)
+  }
+}
 
 export async function invalidateDashboardCache() {
   await invalidateCache(DASHBOARD_CACHE_KEY)
@@ -569,13 +577,15 @@ let pendingMaterializedRefresh: Promise<void> | null = null
 let lastMaterializedRefreshAt = 0
 
 async function refreshMaterializedViews(): Promise<void> {
-  for (const view of MATERIALIZED_VIEWS) {
-    const refreshSql =
-      view === 'mv_inventory_receipts_snapshot'
-        ? `REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`
-        : `REFRESH MATERIALIZED VIEW ${view}`
-    await query(refreshSql)
-  }
+  await Promise.all(
+    MATERIALIZED_VIEWS.map((view) => {
+      const refreshSql =
+        view === 'mv_inventory_receipts_snapshot'
+          ? `REFRESH MATERIALIZED VIEW CONCURRENTLY ${view}`
+          : `REFRESH MATERIALIZED VIEW ${view}`
+      return query(refreshSql)
+    })
+  )
 }
 
 function scheduleDashboardRefresh(force = false): Promise<void> | null {
@@ -591,8 +601,6 @@ function scheduleDashboardRefresh(force = false): Promise<void> | null {
       lastMaterializedRefreshAt = Date.now()
       bypassRedisCache = true
       await (getDashboardSnapshot as any).revalidate()
-    } catch (error) {
-      console.error('[repo:dashboard] failed to refresh materialized views', error)
     } finally {
       pendingMaterializedRefresh = null
     }
@@ -601,7 +609,7 @@ function scheduleDashboardRefresh(force = false): Promise<void> | null {
   return pendingMaterializedRefresh
 }
 
-export async function refreshDashboardSnapshot(waitForRefresh = false) {
+export async function refreshDashboardSnapshot(waitForRefresh = true) {
   const refreshPromise = scheduleDashboardRefresh(waitForRefresh)
   if (waitForRefresh && refreshPromise) {
     await refreshPromise
