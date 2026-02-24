@@ -10,6 +10,7 @@ export function useRealtime() {
     const needsRefreshRef = useRef(false);
 
     useEffect(() => {
+        console.log("Realtime mounted from hook");
         let isMounted = true;
 
         const handleVisibilityChange = () => {
