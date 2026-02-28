@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
-import { requireAuth } from '@/lib/auth'
+import { isUnauthorizedError, requireAuth } from '@/lib/auth'
 import { notifyOrderCompleted } from '@/lib/notifications'
 import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
 import { logActivity } from '@/lib/log-activity'
@@ -427,12 +427,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('orders PATCH error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<RouteParams> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<RouteParams> }) {
   try {
+    await requireAuth(request)
     const resolvedParams = await params
     const orderId = parseOrderId(resolvedParams.id)
     if (Number.isNaN(orderId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
@@ -449,6 +454,10 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('orders DELETE error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
-import { requireAuth } from '@/lib/auth'
+import { isUnauthorizedError, requireAuth } from '@/lib/auth'
 
 function errorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message
@@ -38,6 +38,10 @@ export async function GET(request: NextRequest) {
     }))
     return NextResponse.json(payload)
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('notifications GET error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }
@@ -52,6 +56,10 @@ export async function PATCH(request: NextRequest) {
     await getPool().query('UPDATE notifications SET read_at = $2 WHERE id = $1', [id, read ? new Date() : null])
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('notifications PATCH error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }
@@ -79,6 +87,10 @@ export async function DELETE(request: NextRequest) {
     }
     return NextResponse.json({ ok: true })
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('notifications DELETE error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }

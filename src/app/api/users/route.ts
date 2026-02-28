@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { getPool } from '@/lib/db';
-import { requireAdmin } from '@/lib/auth';
+import { isUnauthorizedError, requireAdmin } from '@/lib/auth';
 import { Role } from '@/lib/domain/types';
 
 const ROLES: Role[] = ['Admin', 'Manager', 'Seller', 'Input Operator', 'Production Operator', 'Picker'];
@@ -22,8 +22,11 @@ export async function GET(req: NextRequest) {
       })),
     });
   } catch (err) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ message: 'Nao autorizado' }, { status: 401 });
+    }
     console.error('users GET error', err);
-    return NextResponse.json({ message: 'Nao autorizado' }, { status: 401 });
+    return NextResponse.json({ message: 'Erro interno' }, { status: 500 });
   }
 }
 
@@ -68,6 +71,9 @@ export async function POST(req: NextRequest) {
       },
     }, { status: 201 });
   } catch (err) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ message: 'Nao autorizado' }, { status: 401 });
+    }
     console.error('users POST error', err);
     return NextResponse.json({ message: 'Erro interno' }, { status: 500 });
   }

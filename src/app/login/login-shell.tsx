@@ -83,12 +83,20 @@ export function LoginShell({ branding }: LoginShellProps) {
         title: 'Sessao iniciada',
         description: `Perfil ativo: ${result.user.name} (${result.user.role}).`,
       });
-      router.push('/dashboard');
+      const meResponse = await fetch('/api/auth/me', {
+        cache: 'no-store',
+        credentials: 'include',
+      });
+      if (!meResponse.ok) {
+        throw new Error('Sessao nao persistida');
+      }
+      router.replace('/dashboard');
+      router.refresh();
     } catch (error) {
       console.error('login error', error);
       toast({
         title: 'Erro inesperado',
-        description: 'Nao foi possivel entrar no momento',
+        description: 'Nao foi possivel iniciar a sessao neste navegador',
         variant: 'destructive',
       });
     } finally {
@@ -275,4 +283,3 @@ export function LoginShell({ branding }: LoginShellProps) {
     </div>
   );
 }
-

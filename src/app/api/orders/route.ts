@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
-import { requireAuth } from '@/lib/auth'
+import { isUnauthorizedError, requireAuth } from '@/lib/auth'
 import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
 import { logActivity } from '@/lib/log-activity'
 import { publishRealtimeEvent } from '@/lib/pubsub'
@@ -139,8 +139,9 @@ function errorMessage(err: unknown): string {
   return String(err)
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    await requireAuth(request)
     const totalStart = process.hrtime.bigint()
     const res = await query<OrderRow>(
       `SELECT
@@ -295,6 +296,10 @@ export async function GET() {
     }
     return NextResponse.json(orders)
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('orders GET error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }
@@ -356,6 +361,10 @@ export async function POST(request: NextRequest) {
 
     return response
   } catch (err: unknown) {
+    if (isUnauthorizedError(err)) {
+      return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 })
+    }
+    console.error('orders POST error', err)
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 })
   }
 }

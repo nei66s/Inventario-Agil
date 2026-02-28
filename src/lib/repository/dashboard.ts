@@ -576,6 +576,10 @@ export async function invalidateDashboardCache() {
 let pendingMaterializedRefresh: Promise<void> | null = null
 let lastMaterializedRefreshAt = 0
 
+type RevalidableDashboardSnapshot = typeof getDashboardSnapshot & {
+  revalidate?: () => Promise<void>
+}
+
 async function refreshMaterializedViews(): Promise<void> {
   await Promise.all(
     MATERIALIZED_VIEWS.map((view) => {
@@ -600,7 +604,14 @@ function scheduleDashboardRefresh(force = false): Promise<void> | null {
       await refreshMaterializedViews()
       lastMaterializedRefreshAt = Date.now()
       bypassRedisCache = true
-      await (getDashboardSnapshot as any).revalidate()
+      const snapshotCache = getDashboardSnapshot as RevalidableDashboardSnapshot
+      if (typeof snapshotCache.revalidate === 'function') {
+        await snapshotCache.revalidate()
+      } else {
+        revalidateDashboardTag()
+      }
+    } catch (error) {
+      console.error('[dashboard] refresh failed; continuing without blocking request', error)
     } finally {
       pendingMaterializedRefresh = null
     }

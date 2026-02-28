@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   AreaChart,
@@ -72,13 +72,14 @@ const navItems = [
 ];
 
 function AppShellContent({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams.get('tab') || 'stock';
   const currentDashTab = searchParams.get('tab') || 'business';
   const [mounted, setMounted] = React.useState(false);
   const [theme, setTheme] = React.useState<'light' | 'dark'>('light');
-  const { user: authUser } = useAuthUser();
+  const { user: authUser, loading: authLoading } = useAuthUser();
 
   const displayUser = authUser ?? null;
   const displayRoleLabel = displayUser ? roleLabel(displayUser.role) : '---';
@@ -116,9 +117,29 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     } catch { }
   }, [theme]);
 
+  React.useEffect(() => {
+    if (!mounted || authLoading) return;
+    if (!authUser) {
+      router.replace('/login');
+    }
+  }, [authLoading, authUser, mounted, router]);
+
   // Use currentTab for active state in sidebar sub-links
   const isInventoryActive = pathname.startsWith('/inventory');
   const isDashboardActive = pathname.startsWith('/dashboard');
+
+  const handleLogout = React.useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('logout failed', error);
+    } finally {
+      router.replace('/login');
+    }
+  }, [router]);
 
   return (
     <div className="relative min-h-svh w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
@@ -343,11 +364,9 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-slate-200/60 dark:bg-slate-800/60" />
-                <DropdownMenuItem asChild className="rounded-xl mx-1 text-red-600 focus:text-red-600 cursor-pointer">
-                  <Link href="/">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sair
-                  </Link>
+                <DropdownMenuItem className="rounded-xl mx-1 text-red-600 focus:text-red-600 cursor-pointer" onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -356,7 +375,11 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
 
           <main className="page-enter flex-1 relative z-10 px-4 py-8 sm:px-8 sm:py-10">
             <div className="mx-auto w-full max-w-full lg:max-w-[1600px]">
-              {children}
+              {authUser ? (
+                children
+              ) : (
+                <div className="py-10 text-center text-sm text-muted-foreground">Validando sessao...</div>
+              )}
             </div>
           </main>
         </SidebarInset>
