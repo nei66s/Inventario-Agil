@@ -16,6 +16,7 @@ import { PeopleIndicatorsData } from '@/lib/repository/people-indicators';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState, useRef, useCallback, Suspense } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useRealtimeStore } from '@/store/use-realtime-store';
 import {
   ResponsiveContainer,
   Cell,
@@ -91,6 +92,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { isConnected } = useRealtimeStore();
   const activeTab = searchParams.get('tab') || 'business';
   const [period, setPeriod] = useState<'month' | 'all'>('month');
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
@@ -373,9 +375,12 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
     <div className="relative w-full space-y-8 pb-12 animate-in fade-in duration-700">
       <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border/40 pb-5 mb-6 px-1">
         <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 mb-1 rounded-full bg-slate-500/10 border border-slate-500/20 text-slate-600 dark:text-slate-400 text-xs font-semibold tracking-wide uppercase shadow-sm">
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
-            Atualizado ao navegar
+          <div className={`inline-flex items-center gap-2 px-3 py-1 mb-1 rounded-full text-xs font-semibold tracking-wide uppercase shadow-sm border transition-all duration-500 ${isConnected
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+            : 'bg-slate-500/10 border-slate-500/20 text-slate-600 dark:text-slate-400'
+            }`}>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`}></span>
+            {isConnected ? 'Sincronismo em tempo real ativo' : 'Atualizado ao navegar'}
           </div>
           <h1 className="text-3xl sm:text-4xl font-light tracking-tight text-slate-900 dark:text-slate-100">
             {activeTab === 'people'

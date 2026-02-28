@@ -59,6 +59,7 @@ import PingHealth from './ping-health';
 import { Input } from './ui/input';
 import { roleLabel } from '@/lib/domain/i18n';
 import { useAuthUser } from '@/hooks/use-auth';
+import { useRealtimeStore } from '@/store/use-realtime-store';
 
 const navItems = [
   { href: '/dashboard', icon: AreaChart, label: 'Indicadores' },
@@ -80,6 +81,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = React.useState(false);
   const [theme, setTheme] = React.useState<'light' | 'dark'>('light');
   const { user: authUser, loading: authLoading } = useAuthUser();
+  const { isConnected } = useRealtimeStore();
 
   const displayUser = authUser ?? null;
   const displayRoleLabel = displayUser ? roleLabel(displayUser.role) : '---';
@@ -331,6 +333,15 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             <div className="hidden items-center gap-2 sm:flex">
               <PingHealth />
               <DbHealth />
+              {mounted && (
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[10px] font-bold tracking-wider uppercase transition-all duration-500 ${isConnected
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-slate-500/10 border-slate-500/30 text-slate-500'
+                  }`}>
+                  <div className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                  {isConnected ? 'Real-time' : 'Real-time offline'}
+                </div>
+              )}
             </div>
             {mounted ? (
               <Button
