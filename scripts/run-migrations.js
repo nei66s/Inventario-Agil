@@ -6,6 +6,10 @@ const { Client } = require('pg')
 async function main() {
   const databaseUrl = process.env.DATABASE_URL
   if (!databaseUrl) {
+    if (process.env.NEXT_PHASE === 'phase-production-build' || process.env.SKIP_DB_CHECK === '1') {
+      console.log('DATABASE_URL not set. Skipping migrations during build phase.')
+      return
+    }
     console.error('DATABASE_URL not set')
     process.exit(1)
   }

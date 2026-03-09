@@ -15,6 +15,7 @@ COPY . .
 
 # Environment variables for build
 ENV NEXT_TELEMETRY_DISABLED 1
+ENV SKIP_DB_CHECK 1
 
 RUN npm run build
 
