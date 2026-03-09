@@ -17,7 +17,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED 1
 ENV SKIP_DB_CHECK 1
 
-RUN npm run build
+RUN npx next build
 
 # Stage 3: Runner
 FROM node:20-alpine AS runner
@@ -32,8 +32,8 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 
 # Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
+RUN mkdir next_build
+RUN chown nextjs:nodejs next_build
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing
