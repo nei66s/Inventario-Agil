@@ -297,122 +297,201 @@ export default function PickingPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Material</TableHead>
-                    <TableHead>Desc</TableHead>
-                    <TableHead>Cor</TableHead>
-                    <TableHead className="text-right">Peso</TableHead>
-                    <TableHead className="text-right">Qtd. solicitada</TableHead>
-                    <TableHead className="text-right">Qtd. reservada</TableHead>
-                    <TableHead className="text-right">Estoque atual</TableHead>
-                    <TableHead className="text-right">Qtd. separada</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {selected.items.map((item) => {
-                    const currentStock = stockByMaterial.get(item.materialId);
-                    return (
-                      <React.Fragment key={item.id}>
-                        <TableRow>
-                          <TableCell className="max-w-[120px]">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <p className="truncate font-medium">{item.materialName}</p>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{item.materialName}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <p className="text-[10px] text-muted-foreground">{item.uom}</p>
-                            {item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0 ? (
-                              <div className="mt-1">
-                                <Badge variant="outline">Em produção</Badge>
+              {/* Desktop Picking Table */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Material</TableHead>
+                      <TableHead>Desc</TableHead>
+                      <TableHead>Cor</TableHead>
+                      <TableHead className="text-right">Peso</TableHead>
+                      <TableHead className="text-right">Qtd. solicitada</TableHead>
+                      <TableHead className="text-right">Qtd. reservada</TableHead>
+                      <TableHead className="text-right">Estoque atual</TableHead>
+                      <TableHead className="text-right">Qtd. separada</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selected.items.map((item) => {
+                      const currentStock = stockByMaterial.get(item.materialId);
+                      return (
+                        <React.Fragment key={item.id}>
+                          <TableRow>
+                            <TableCell className="max-w-[120px]">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <p className="truncate font-medium">{item.materialName}</p>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{item.materialName}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <p className="text-[10px] text-muted-foreground">{item.uom}</p>
+                              {item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0 ? (
+                                <div className="mt-1">
+                                  <Badge variant="outline">Em produção</Badge>
+                                </div>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="text-left text-sm text-muted-foreground">{item.description ?? item.materialName}</TableCell>
+                            <TableCell className="text-left text-sm text-muted-foreground">{item.color}</TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                id={`weight-${item.id}`}
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                className="ml-auto w-full max-w-[5.5rem] text-right"
+                                value={item.separatedWeight ?? ''}
+                                onChange={(e) => updateSeparatedWeightLocal(selected.id, item.id, Number(e.target.value))}
+                                onBlur={(e) => commitSeparatedWeight(selected.id, item.id, Number(e.target.value))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    document.getElementById(`qty-${item.id}`)?.focus();
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="text-right">{item.qtyRequested}</TableCell>
+                            <TableCell className="text-right">{item.qtyReservedFromStock}</TableCell>
+                            <TableCell className="text-right">{currentStock?.onHand ?? 0}</TableCell>
+                            <TableCell className="text-right">
+                              <Input
+                                id={`qty-${item.id}`}
+                                type="number"
+                                min={0}
+                                max={item.qtyReservedFromStock}
+                                className="ml-auto w-full max-w-[5.5rem] text-right font-bold"
+                                value={item.qtySeparated}
+                                onChange={(e) => updateSeparatedQtyLocal(selected.id, item.id, Number(e.target.value))}
+                                onBlur={(e) => commitSeparatedQty(selected.id, item.id, Number(e.target.value))}
+                                readOnly={item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0}
+                                disabled={item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    // Focus next item's weight
+                                    const itemIdx = selected.items.findIndex(it => it.id === item.id);
+                                    const nextItem = selected.items[itemIdx + 1];
+                                    if (nextItem) {
+                                      document.getElementById(`weight-${nextItem.id}`)?.focus();
+                                    }
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                          <TableRow>
+                            <TableCell colSpan={8} className="bg-muted/30">
+                              <div className="space-y-2">
+                                <Label>Condições do item</Label>
+                                {item.conditions && item.conditions.length > 0 ? (
+                                  item.conditions.map((cond, idx) => (
+                                    <div key={idx} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                                      <Input
+                                        placeholder="Campo (ex: Cor)"
+                                        value={cond.key}
+                                        readOnly
+                                      />
+                                      <Input
+                                        placeholder="Valor (ex: Vermelho)"
+                                        value={cond.value}
+                                        readOnly
+                                      />
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-muted-foreground">Sem condições adicionadas.</p>
+                                )}
                               </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="text-left text-sm text-muted-foreground">{item.description ?? item.materialName}</TableCell>
-                          <TableCell className="text-left text-sm text-muted-foreground">{item.color}</TableCell>
-                          <TableCell className="text-right">
+                            </TableCell>
+                          </TableRow>
+                        </React.Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Mobile Picking Cards */}
+              <div className="grid grid-cols-1 gap-4 md:hidden">
+                {selected.items.map((item) => {
+                  const currentStock = stockByMaterial.get(item.materialId);
+                  const isBlocked = item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0;
+                  return (
+                    <div key={item.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/5 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-900 dark:text-slate-100">{item.materialName}</p>
+                          <p className="text-[10px] text-slate-500">{item.description || item.materialName}</p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">{item.uom}</Badge>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="flex flex-col items-center justify-center rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2">
+                          <span className="text-[8px] uppercase font-bold text-slate-400">Solicitado</span>
+                          <span className="text-sm font-bold">{item.qtyRequested}</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-lg bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 p-2">
+                          <span className="text-[8px] uppercase font-bold text-indigo-500">Reservado</span>
+                          <span className="text-sm font-bold text-indigo-700 dark:text-indigo-300">{item.qtyReservedFromStock}</span>
+                        </div>
+                        <div className="flex flex-col items-center justify-center rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-2">
+                          <span className="text-[8px] uppercase font-bold text-slate-400">Estoque</span>
+                          <span className="text-sm font-bold">{currentStock?.onHand ?? 0}</span>
+                        </div>
+                      </div>
+
+                      {isBlocked ? (
+                        <div className="flex items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30 p-3">
+                          <p className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-tighter">🔒 Aguardando Produção</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`weight-mob-${item.id}`} className="text-[10px] font-bold uppercase text-slate-500">Peso / Metragem</Label>
                             <Input
-                              id={`weight-${item.id}`}
+                              id={`weight-mob-${item.id}`}
                               type="number"
                               step="0.01"
-                              min={0}
-                              className="ml-auto w-full max-w-[5.5rem] text-right"
+                              className="h-11 text-center font-bold text-lg"
                               value={item.separatedWeight ?? ''}
                               onChange={(e) => updateSeparatedWeightLocal(selected.id, item.id, Number(e.target.value))}
                               onBlur={(e) => commitSeparatedWeight(selected.id, item.id, Number(e.target.value))}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  document.getElementById(`qty-${item.id}`)?.focus();
-                                }
-                              }}
                             />
-                          </TableCell>
-                          <TableCell className="text-right">{item.qtyRequested}</TableCell>
-                          <TableCell className="text-right">{item.qtyReservedFromStock}</TableCell>
-                          <TableCell className="text-right">{currentStock?.onHand ?? 0}</TableCell>
-                          <TableCell className="text-right">
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`qty-mob-${item.id}`} className="text-[10px] font-bold uppercase text-indigo-500">Qtd. Separada</Label>
                             <Input
-                              id={`qty-${item.id}`}
+                              id={`qty-mob-${item.id}`}
                               type="number"
-                              min={0}
-                              max={item.qtyReservedFromStock}
-                              className="ml-auto w-full max-w-[5.5rem] text-right font-bold"
+                              className="h-11 text-center font-bold text-lg border-indigo-200 dark:border-indigo-800 focus:ring-indigo-500"
                               value={item.qtySeparated}
                               onChange={(e) => updateSeparatedQtyLocal(selected.id, item.id, Number(e.target.value))}
                               onBlur={(e) => commitSeparatedQty(selected.id, item.id, Number(e.target.value))}
-                              readOnly={item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0}
-                              disabled={item.qtyToProduce > 0 && item.qtyReservedFromStock <= 0}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  // Focus next item's weight
-                                  const itemIdx = selected.items.findIndex(it => it.id === item.id);
-                                  const nextItem = selected.items[itemIdx + 1];
-                                  if (nextItem) {
-                                    document.getElementById(`weight-${nextItem.id}`)?.focus();
-                                  }
-                                }
-                              }}
                             />
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell colSpan={8} className="bg-muted/30">
-                            <div className="space-y-2">
-                              <Label>Condições do item</Label>
-                              {item.conditions && item.conditions.length > 0 ? (
-                                item.conditions.map((cond, idx) => (
-                                  <div key={idx} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                                    <Input
-                                      placeholder="Campo (ex: Cor)"
-                                      value={cond.key}
-                                      readOnly
-                                    />
-                                    <Input
-                                      placeholder="Valor (ex: Vermelho)"
-                                      value={cond.value}
-                                      readOnly
-                                    />
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="text-muted-foreground">Sem condições adicionadas.</p>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      </React.Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                          </div>
+                        </div>
+                      )}
+
+                      {item.conditions && item.conditions.length > 0 && (
+                         <div className="rounded-lg bg-slate-100/50 dark:bg-slate-800/50 p-2 space-y-1">
+                            {item.conditions.map((c, i) => (
+                              <p key={i} className="text-[10px] text-slate-600 dark:text-slate-400">
+                                <span className="font-bold uppercase">{c.key}:</span> {c.value}
+                              </p>
+                            ))}
+                         </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
               <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
                 <Label className="text-sm">Ultimos eventos de auditoria</Label>

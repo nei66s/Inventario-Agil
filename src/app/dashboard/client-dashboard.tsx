@@ -384,7 +384,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
           <section aria-labelledby="overview">
             <h3 id="overview" className="font-headline text-lg">Overview</h3>
             <p className="text-sm text-muted-foreground mt-1">Visão consolidada com KPIs principais e atalhos.</p>
-            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               <KpiCard
                 title="Pedidos abertos"
                 value={openOrders}

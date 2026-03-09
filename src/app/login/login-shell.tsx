@@ -25,8 +25,8 @@ export function LoginShell({ branding }: LoginShellProps) {
   const { toast } = useToast();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [mounted, setMounted] = useState(false);
-  const [email, setEmail] = useState('seller@supplyflow.local');
-  const [password, setPassword] = useState('demo');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const themeIcon = mounted
@@ -118,17 +118,18 @@ export function LoginShell({ branding }: LoginShellProps) {
         <div className="relative z-10 flex items-center gap-4">
           <div className="relative h-12 w-12 bg-white/10 p-2 rounded-xl backdrop-blur-sm border border-white/10">
             <Image
-              src="/black-tower-x-transp.png"
-              alt="Black Tower X"
+              src={branding.logoSrc}
+              alt={branding.companyName}
               fill
               sizes="48px"
               className="object-contain p-1 dark:brightness-200 dark:invert-0 brightness-0 invert"
               priority
+              unoptimized
             />
           </div>
           <div>
-            <span className="font-bold text-xl tracking-widest block text-slate-100">BLACK TOWER X</span>
-            <span className="text-xs uppercase tracking-[0.3em] text-slate-400 font-medium">Plataforma SaaS</span>
+            <span className="font-bold text-xl tracking-widest block text-slate-100 uppercase">{branding.companyName}</span>
+            <span className="text-xs uppercase tracking-[0.3em] text-slate-400 font-medium">{branding.platformLabel}</span>
           </div>
         </div>
 
@@ -178,43 +179,31 @@ export function LoginShell({ branding }: LoginShellProps) {
             transition: 'opacity 0.5s ease-out, transform 0.5s ease-out'
           }}
         >
-          {/* Mobile branding fallback */}
-          <div className="flex md:hidden flex-col items-center gap-3 mb-8">
-            <div className="relative h-16 w-16 bg-white dark:bg-slate-900 p-3 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-              <Image
-                src="/black-tower-x-transp.png"
-                alt="Black Tower X"
-                fill
-                sizes="64px"
-                className="object-contain p-2 dark:brightness-200 dark:invert-0"
-              />
-            </div>
-            <div className="text-center">
-              <span className="font-bold text-base tracking-widest uppercase text-slate-900 dark:text-slate-100 block">Black Tower X</span>
-              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-medium">Plataforma SaaS</span>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl rounded-3xl p-8 sm:p-10 border border-slate-200/60 dark:border-slate-800/60 transition-opacity duration-300">
-            <div className="flex flex-col items-center space-y-5 mb-10">
-              <div className="relative h-14 w-48 mb-2">
+          <div className="bg-white dark:bg-slate-900/80 backdrop-blur-xl shadow-2xl rounded-[32px] p-8 sm:p-10 border border-slate-200/60 dark:border-slate-800/60 transition-opacity duration-300">
+            <div className="flex flex-col items-center space-y-6 mb-10">
+              <div className="relative h-16 w-16 bg-slate-50 dark:bg-slate-900 p-3 rounded-2xl shadow-inner border border-slate-100 dark:border-slate-800">
                 <Image
                   src={branding.logoSrc}
                   alt={`${branding.companyName} logo`}
                   fill
-                  sizes="192px"
-                  className="object-contain"
+                  sizes="64px"
+                  className="object-contain p-2 dark:brightness-200 dark:invert-0"
                   priority
                   unoptimized
                 />
               </div>
-              <div className="text-center space-y-1.5">
-                <h2 className="text-2xl tracking-tight font-semibold text-slate-900 dark:text-white">
+              <div className="text-center space-y-2">
+                <h2 className="text-3xl tracking-tight font-bold text-slate-900 dark:text-white font-headline">
                   Inventário Ágil
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
-                  {branding.companyName}
-                </p>
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400 mb-1">
+                    {branding.platformLabel}
+                  </span>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">
+                    {branding.companyName}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -275,8 +264,8 @@ export function LoginShell({ branding }: LoginShellProps) {
             </form>
           </div>
 
-          <p className="text-center text-xs font-medium text-slate-500 dark:text-slate-500/80">
-            &copy; {new Date().getFullYear()} Black Tower X. Todos os direitos reservados.
+          <p className="text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500/60">
+            &copy; {new Date().getFullYear()} {branding.companyName}. Todos os direitos reservados.
           </p>
         </div>
       </div>

@@ -298,107 +298,224 @@ export default function ProductionPage() {
     </TableRow>
   );
 
+  const renderTaskCard = (task: ProductionTask) => (
+    <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/5 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="font-bold text-slate-900 dark:text-slate-100">{task.orderNumber}</p>
+            {task.isMrp && (
+              <Badge variant="outline" className="flex items-center gap-1 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
+                <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                mrp
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs font-medium text-indigo-600 dark:text-indigo-400 mt-0.5">{task.materialName}</p>
+          <p className="text-[10px] text-slate-500 italic">{task.description || task.materialName} {task.color ? `• ${task.color}` : ''}</p>
+        </div>
+        <Badge variant={task.status === 'DONE' ? 'positive' : task.status === 'IN_PROGRESS' ? 'warning' : 'outline'}>
+          {productionTaskStatusLabel(task.status)}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 py-1">
+        <div className="flex flex-col items-center justify-center rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2">
+          <span className="text-[8px] uppercase font-bold text-slate-400">Solicitado</span>
+          <span className="text-sm font-bold">{task.qtyToProduce}</span>
+        </div>
+        <div className="flex flex-col gap-1 col-span-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              type="number"
+              className="h-9 px-2 text-center text-xs font-bold"
+              defaultValue={task.producedQty ?? ''}
+              placeholder="Qtd."
+              onBlur={(e) => {
+                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                if (val !== task.producedQty) saveMeta(task.id, val, task.producedWeight);
+              }}
+            />
+            <Input
+              type="number"
+              step="0.01"
+              className="h-9 px-2 text-center text-xs font-bold"
+              defaultValue={task.producedWeight ?? ''}
+              placeholder="Peso"
+              onBlur={(e) => {
+                const val = e.target.value === '' ? undefined : Number(e.target.value);
+                if (val !== task.producedWeight) saveMeta(task.id, task.producedQty, val);
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-2">
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-9 font-bold text-xs"
+            disabled={task.status !== 'PENDING' || busyTaskId === task.id}
+            onClick={() => mutateTask(task.id, 'start')}
+          >
+            Iniciar
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 h-9 font-bold text-xs"
+            disabled={task.status === 'DONE' || busyTaskId === task.id}
+            onClick={() => {
+              if (!task.labelPrinted) {
+                setError('Você deve imprimir a etiqueta antes de concluir.');
+                return;
+              }
+              mutateTask(task.id, 'complete');
+            }}
+          >
+            Concluir
+          </Button>
+        </div>
+        <Button
+          size="sm"
+          variant={task.labelPrinted ? "outline" : "default"}
+          className="w-full h-9 font-bold text-xs"
+          disabled={busyLabelTaskId === task.id || busyTaskId === task.id}
+          onClick={() => handlePrintProductionLabel(task)}
+        >
+          <FileText className="mr-2 h-4 w-4" />
+          {task.labelPrinted ? 'Reimprimir' : 'Imprimir'} Etiqueta
+        </Button>
+      </div>
+
+      <div className="flex justify-between items-center mt-1 text-[9px] uppercase tracking-tighter text-muted-foreground/60">
+        <span>ID: {task.id.slice(0, 8)}</span>
+        <span>Atualizado: {formatDate(task.updatedAt)}</span>
+      </div>
+    </div>
+  );
+
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="font-headline flex items-center gap-2"><Factory className="h-5 w-5" /> Producao</CardTitle>
-            <CardDescription>
-              Tarefas de producao persistidas no banco. Concluir reserva automaticamente o estoque produzido por 5 minutos antes de liberar para o picking.
+            <CardDescription className="text-xs sm:text-sm">
+              Tarefas de producao persistidas no banco. Concluir libera para o picking.
             </CardDescription>
           </div>
-          <p className="text-xs text-muted-foreground">Dados atualizados sob demanda.</p>
-          <Button size="sm" variant="outline" onClick={() => loadTasks({ skipLoading: true })} disabled={loading}>
-            <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-3">
+             <Button size="sm" variant="outline" onClick={() => loadTasks({ skipLoading: true })} disabled={loading}>
+              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
       </CardHeader>
       {error ? (
         <CardHeader className="pt-0">
-          <CardDescription className="text-destructive">{error}</CardDescription>
+          <CardDescription className="text-destructive font-bold text-xs bg-destructive/10 p-2 rounded-lg border border-destructive/20">{error}</CardDescription>
         </CardHeader>
       ) : null}
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Pedido</TableHead>
-              <TableHead>Material</TableHead>
-              <TableHead>Desc</TableHead>
-              <TableHead>Cor</TableHead>
-              <TableHead className="text-right">Qtd Solic.</TableHead>
-              <TableHead className="text-center w-[100px]">Qtd Prod.</TableHead>
-              <TableHead className="text-center w-[100px]">Peso (KG)</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Atualizado</TableHead>
-              <TableHead className="text-right">Acoes</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
-                  Carregando tarefas...
-                </TableCell>
+                <TableHead>Pedido</TableHead>
+                <TableHead>Material</TableHead>
+                <TableHead>Desc</TableHead>
+                <TableHead>Cor</TableHead>
+                <TableHead className="text-right">Qtd Solic.</TableHead>
+                <TableHead className="text-center w-[100px]">Qtd Prod.</TableHead>
+                <TableHead className="text-center w-[100px]">Peso (KG)</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Atualizado</TableHead>
+                <TableHead className="text-right">Acoes</TableHead>
               </TableRow>
-            ) : activeTasks.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={11} className="border-none py-8">
-                  <EmptyState
-                    icon={Factory}
-                    title="Sem tarefas pendentes"
-                    description="As tarefas iniciadas ou concluidas ficam guardadas no histórico."
-                    className="min-h-[120px]"
-                  />
-                </TableCell>
-              </TableRow>
-            ) : (
-              activeTasks.map((task) => renderTaskRow(task))
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="py-8 text-center text-muted-foreground">
+                    Carregando tarefas...
+                  </TableCell>
+                </TableRow>
+              ) : activeTasks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="border-none py-8">
+                    <EmptyState
+                      icon={Factory}
+                      title="Sem tarefas pendentes"
+                      description="As tarefas iniciadas ou concluidas ficam guardadas no histórico."
+                      className="min-h-[120px]"
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                activeTasks.map((task) => renderTaskRow(task))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Mobile Task Cards */}
+        <div className="grid grid-cols-1 gap-4 md:hidden">
+          {loading ? (
+             <EmptyState title="Carregando..." description="Buscando tarefas de produção." className="min-h-[120px]" />
+          ) : activeTasks.length === 0 ? (
+             <EmptyState icon={Factory} title="Fila Limpa" description="Sem tarefas pendentes no momento." className="min-h-[120px]" />
+          ) : (
+             activeTasks.map((task) => renderTaskCard(task))
+          )}
+        </div>
       </CardContent>
+
       {historyTasks.length > 0 && (
         <CardContent className="pt-2">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold">Histórico de produção</p>
-              <p className="text-xs text-muted-foreground">
-                Tarefas iniciadas ou concluídas continuam disponíveis aqui.
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-0 sm:px-4 py-2 bg-muted/20 rounded-xl border border-muted/50">
+            <div className="flex-1">
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Histórico de produção</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-0.5">
+                {historyTasks.length} tarefas finalizadas
               </p>
             </div>
-            <Button className="w-full sm:w-auto" size="sm" variant="outline" onClick={() => setShowHistory((prev) => !prev)}>
-              {showHistory ? 'Ocultar histórico' : 'Ver histórico'} ({historyTasks.length})
+            <Button className="w-full sm:w-auto h-9 font-bold text-xs" variant="outline" onClick={() => setShowHistory((prev) => !prev)}>
+              {showHistory ? 'Ocultar histórico' : 'Ver histórico'}
             </Button>
           </div>
-          {showHistory ? (
-            <div className="mt-3 overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Pedido</TableHead>
-                    <TableHead>Material</TableHead>
-                    <TableHead>Desc</TableHead>
-                    <TableHead>Cor</TableHead>
-                    <TableHead className="text-right">Qtd Solic.</TableHead>
-                    <TableHead className="text-center w-[100px]">Qtd Prod.</TableHead>
-                    <TableHead className="text-center w-[100px]">Peso (KG)</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Atualizado</TableHead>
-                    <TableHead className="text-right">Acoes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {historyTasks.map((task) => renderTaskRow(task))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Clique para expandir e revisar as tarefas já iniciadas ou finalizadas.
-            </p>
+          {showHistory && (
+             <div className="mt-4 space-y-4 animate-in fade-in duration-300">
+                {/* Mobile History Cards */}
+                <div className="grid grid-cols-1 gap-4 md:hidden">
+                  {historyTasks.map((task) => renderTaskCard(task))}
+                </div>
+                {/* Desktop History Table */}
+                <div className="hidden md:block overflow-x-auto">
+                   <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Pedido</TableHead>
+                        <TableHead>Material</TableHead>
+                        <TableHead>Desc</TableHead>
+                        <TableHead>Cor</TableHead>
+                        <TableHead className="text-right">Qtd Solic.</TableHead>
+                        <TableHead className="text-center w-[100px]">Qtd Prod.</TableHead>
+                        <TableHead className="text-center w-[100px]">Peso (KG)</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Atualizado</TableHead>
+                        <TableHead className="text-right">Acoes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyTasks.map((task) => renderTaskRow(task))}
+                    </TableBody>
+                  </Table>
+                </div>
+             </div>
           )}
         </CardContent>
       )}

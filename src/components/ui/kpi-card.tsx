@@ -66,15 +66,15 @@ export function KpiCard({
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
     >
-      <CardContent className="p-4 sm:p-6">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</p>
+      <CardContent className="p-3 sm:p-6">
+        <div className="mb-2 flex items-start justify-between gap-2 sm:mb-4 sm:gap-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:text-xs">{title}</p>
           <div
             className={cn('flex h-10 w-10 items-center justify-center rounded-full', toneStyles[tone])}
             role="img"
             aria-label={`${title} icon`}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
         </div>
 
@@ -82,9 +82,9 @@ export function KpiCard({
           <Skeleton className="h-9 w-24" />
         ) : (
           <div>
-            <p className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl" role="status" aria-live="polite">
+            <p className="text-xl font-bold tracking-tight text-foreground sm:text-3xl lg:text-4xl" role="status" aria-live="polite">
               {value}
-              {unit ? <span className="ml-1 text-base font-medium text-muted-foreground">{unit}</span> : null}
+              {unit ? <span className="ml-0.5 text-xs font-medium text-muted-foreground sm:ml-1 sm:text-base">{unit}</span> : null}
             </p>
             {Array.isArray(sparkline) && sparkline.length > 0 ? (
               <div className="mt-2 h-8 w-28">

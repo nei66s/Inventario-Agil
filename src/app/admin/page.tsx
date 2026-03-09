@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { useAuthUser } from '@/hooks/use-auth';
+import { useSiteBranding } from '@/hooks/use-site-branding';
 import { Role } from '@/lib/domain/types'; // Role is still needed for AccountForm and roleOptions
 import { roleLabel } from '@/lib/domain/i18n';
 
@@ -32,6 +34,7 @@ const roleOptions: Role[] = ['Admin', 'Manager', 'Seller', 'Input Operator', 'Pr
 export default function AdminPage() {
   const { user: authUser, loading: authLoading } = useAuthUser();
   const { toast } = useToast();
+  const { branding, refreshBranding } = useSiteBranding();
   const [users, setUsers] = useState<AccountRecord[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [form, setForm] = useState<AccountForm>({
@@ -93,7 +96,7 @@ export default function AdminPage() {
       })
       .then((payload) => {
         if (!active) return;
-        setCompanyName(payload.companyName || 'Black Tower X');
+        setCompanyName(payload.companyName || branding.companyName);
         setDocument(payload.document || '');
         setPhone(payload.phone || '');
         setAddress(payload.address || '');
@@ -102,12 +105,12 @@ export default function AdminPage() {
       })
       .catch(() => {
         if (!active) return;
-        setCompanyName((prev) => prev || 'Black Tower X');
+        setCompanyName((prev) => prev || branding.companyName);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [branding.companyName]);
 
   const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -171,6 +174,10 @@ export default function AdminPage() {
       setAddress(result.address || '');
       setLogoDataUrl(result.logoDataUrl ?? null);
       setLogoFileName(result.logoDataUrl ? 'Logo enviado' : null);
+      
+      // Refresh global branding state/cache
+      refreshBranding();
+
       toast({
         title: 'Marca atualizada',
         description: 'Nome e logo personalizados foram salvos.',
@@ -555,76 +562,94 @@ export default function AdminPage() {
             {!loadingUsers && sortedUsers.length === 0 && (
               <p className="text-sm text-muted-foreground">Nenhum usuario listado.</p>
             )}
-            <div className="space-y-2">
-              {sortedUsers.map((account) => (
-                <div
-                  key={account.id}
-                  className="flex flex-col items-start gap-3 rounded-md border border-border/70 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <div className="min-w-0">
-                      <p className={`truncate text-sm font-semibold ${account.isBlocked ? 'text-muted-foreground line-through' : ''}`}>
-                        {account.name}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">{account.email}</p>
+            <div className="grid grid-cols-1 gap-3">
+              {sortedUsers.map((account) => {
+                const isAuthUser = account.id === authUser?.id;
+                const isRoleChanged = roleSelection[account.id] !== undefined && roleSelection[account.id] !== account.role;
+                
+                return (
+                  <div
+                    key={account.id}
+                    className="flex flex-col gap-4 rounded-2xl border border-border bg-muted/5 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-900/40 dark:text-slate-400 font-bold shrink-0">
+                          {account.name.charAt(0).toUpperCase()}
+                       </div>
+                       <div className="min-w-0">
+                          <p className={`truncate text-sm font-bold text-slate-900 dark:text-slate-100 ${account.isBlocked ? 'line-through text-muted-foreground' : ''}`}>
+                            {account.name} {isAuthUser && '(Você)'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                             <p className="truncate text-[11px] text-muted-foreground">{account.email}</p>
+                             <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-bold uppercase tracking-wider">
+                               {roleLabel(account.role as Role)}
+                             </Badge>
+                             {account.isBlocked && <Badge variant="destructive" className="h-4 text-[9px]">Bloqueado</Badge>}
+                          </div>
+                       </div>
                     </div>
-                    {account.isBlocked && <Badge variant="destructive" className="ml-2 text-[10px]">Bloqueado</Badge>}
+
+                    <div className="flex flex-wrap items-center gap-2 border-t pt-3 sm:border-t-0 sm:pt-0">
+                      <div className="flex-1 sm:flex-none">
+                        <Select
+                          value={roleSelection[account.id] ?? (account.role as Role)}
+                          onValueChange={(value) =>
+                            setRoleSelection((prev) => ({ ...prev, [account.id]: value as Role }))
+                          }
+                          disabled={isAuthUser || updatingId === account.id}
+                        >
+                          <SelectTrigger className="h-9 w-full sm:w-36 text-xs font-semibold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roleOptions.map((roleOption) => (
+                              <SelectItem key={roleOption} value={roleOption}>
+                                {roleLabel(roleOption)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+                        {isRoleChanged && (
+                          <Button
+                            variant="default"
+                            size="icon"
+                            className="h-9 w-9 bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => handleRoleUpdate(account.id)}
+                            disabled={updatingId === account.id}
+                            title="Salvar alteração de cargo"
+                          >
+                            <Save className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant={account.isBlocked ? "outline" : "ghost"}
+                          size="icon"
+                          className={cn("h-9 w-9", !account.isBlocked && "text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20")}
+                          onClick={() => handleToggleBlock(account.id, !!account.isBlocked)}
+                          disabled={isAuthUser || updatingId === account.id}
+                          title={account.isBlocked ? 'Desbloquear usuário' : 'Bloquear usuário'}
+                        >
+                          {account.isBlocked ? <CheckCircle className="h-4 w-4 text-green-600" /> : <UserX className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => handleDelete(account.id)}
+                          disabled={isAuthUser || updatingId === account.id}
+                          title="Excluir usuário"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-none flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center justify-center">
-                    <Select
-                      value={roleSelection[account.id] ?? (account.role as Role)}
-                      onValueChange={(value) =>
-                        setRoleSelection((prev) => ({ ...prev, [account.id]: value as Role }))
-                      }
-                      disabled={account.id === authUser.id}
-                    >
-                      <SelectTrigger className="w-full sm:w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roleOptions.map((roleOption) => (
-                          <SelectItem key={roleOption} value={roleOption}>
-                            {roleLabel(roleOption)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex-1 flex items-center gap-2 justify-end">
-                    <Badge variant="outline">{roleLabel(account.role as Role)}</Badge>
-                    <Button
-                      variant="outline"
-                      className="h-8 w-8 text-primary"
-                      size="icon"
-                      onClick={() => handleRoleUpdate(account.id)}
-                      disabled={account.id === authUser.id || updatingId === account.id || roleSelection[account.id] === account.role}
-                      title="Salvar role"
-                    >
-                      <Save className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant={account.isBlocked ? "outline" : "destructive"}
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleToggleBlock(account.id, !!account.isBlocked)}
-                      disabled={account.id === authUser.id || updatingId === account.id}
-                      title={account.isBlocked ? 'Desbloquear usuario' : 'Bloquear usuario'}
-                    >
-                      {account.isBlocked ? <CheckCircle className="h-4 w-4 text-green-500" /> : <UserX className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleDelete(account.id)}
-                      disabled={account.id === authUser.id || updatingId === account.id}
-                      title="Excluir usuario"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </CardContent>

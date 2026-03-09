@@ -208,109 +208,186 @@ function InventoryPageContent() {
             <CardDescription>Em estoque, reservado e disponível calculados em tempo real.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20"></TableHead>
-                  <TableHead>Material</TableHead>
-                  <TableHead className="text-right">Em estoque</TableHead>
-                  <TableHead className="text-right">Reservado</TableHead>
-                  <TableHead className="text-right">Reservado produção</TableHead>
-                  <TableHead className="text-right">Disponivel</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {stockView.map((entry) => {
-                  const material = entry.material;
-                  const statusVariant = entry.available <= 0 ? 'destructive' : material && entry.available <= material.minStock ? 'warning' : 'positive';
-                  const variantRows = variantsByMaterial[entry.materialId] ?? [];
-                  const hasVariants = variantRows.length > 0;
-                  const isExpanded = Boolean(expandedVariantRows[entry.materialId] && hasVariants);
+            {/* Desktop Table - Hidden on Mobile */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-20"></TableHead>
+                    <TableHead>Material</TableHead>
+                    <TableHead className="text-right">Em estoque</TableHead>
+                    <TableHead className="text-right">Reservado</TableHead>
+                    <TableHead className="text-right">Reservado produção</TableHead>
+                    <TableHead className="text-right">Disponivel</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stockView.map((entry) => {
+                    const material = entry.material;
+                    const statusVariant = entry.available <= 0 ? 'destructive' : material && entry.available <= material.minStock ? 'warning' : 'positive';
+                    const variantRows = variantsByMaterial[entry.materialId] ?? [];
+                    const hasVariants = variantRows.length > 0;
+                    const isExpanded = Boolean(expandedVariantRows[entry.materialId] && hasVariants);
 
-                  return (
-                    <Fragment key={entry.materialId}>
-                      <TableRow>
-                        <TableCell className="pr-2 align-top">
-                          {hasVariants ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleVariantRow(entry.materialId)}
-                              className="inline-flex items-center gap-1 text-xs uppercase tracking-[0.2em] opacity-100 shadow"
-                            >
-                              {isExpanded ? (
-                                <ChevronUp className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              )}
-                              Vertentes
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <p className="font-medium">{material?.name}</p>
-                          <p className="text-xs text-muted-foreground">{entry.materialId} - min {material?.minStock} - ponto de pedido {material?.reorderPoint}</p>
-                        </TableCell>
-                        <TableCell className="text-right">{entry.onHand}</TableCell>
-                        <TableCell className="text-right">{entry.reservedTotal}</TableCell>
-                        <TableCell className="text-right">{entry.productionReserved ?? 0}</TableCell>
-                        <TableCell className="text-right font-semibold">{entry.available}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={statusVariant}>{statusVariant === 'destructive' ? 'RUPTURA' : statusVariant === 'warning' ? 'BAIXO' : 'OK'}</Badge>
-                        </TableCell>
-                      </TableRow>
-                      {isExpanded && variantRows.length > 0 && (
-                        <TableRow key={`${entry.materialId}-variants`}>
-                          <TableCell className="border-none p-0" />
-                          <TableCell colSpan={6} className="border-none bg-muted/10 px-3 py-4 sm:px-6">
-                            <div className="space-y-3">
-                              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Materiais Condicionados</p>
-                              <div className="grid gap-3 md:grid-cols-2">
-                                {variantRows.map((variant, variantIndex) => {
-                                  const summary =
-                                    variant.conditions
-                                      .map((cond) => `${cond.key}: ${cond.value}`)
-                                      .filter(Boolean)
-                                      .join(' • ') || 'Sem condições';
-                                  const variantKey = `${entry.materialId}-${variantIndex}-${summary}`;
-                                  return (
-                                    <div key={variantKey} className="rounded-2xl border border-border bg-background/70 p-3 shadow-sm">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <p className="text-sm font-semibold">{summary}</p>
-                                        <span className="text-xs text-muted-foreground">
-                                          Solic: {variant.quantityRequested}
-                                        </span>
-                                      </div>
-                                      <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-2 lg:grid-cols-3">
-                                        <div>
-                                          <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Reservado</p>
-                                          <p className="text-sm font-semibold text-foreground">{variant.reservedFromStock}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Produção</p>
-                                          <p className="text-sm font-semibold text-amber-600">{variant.qtyToProduce}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Total</p>
-                                          <p className="text-sm font-semibold text-foreground">{variant.quantityRequested}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                    return (
+                      <Fragment key={entry.materialId}>
+                        <TableRow>
+                          <TableCell className="pr-2 align-top">
+                            {hasVariants ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleVariantRow(entry.materialId)}
+                                className="inline-flex items-center gap-1 text-xs uppercase tracking-[0.2em] opacity-100 shadow"
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                ) : (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                )}
+                                Vertentes
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <p className="font-medium">{material?.name}</p>
+                            <p className="text-xs text-muted-foreground">{entry.materialId} - min {material?.minStock} - ponto de pedido {material?.reorderPoint}</p>
+                          </TableCell>
+                          <TableCell className="text-right">{entry.onHand}</TableCell>
+                          <TableCell className="text-right">{entry.reservedTotal}</TableCell>
+                          <TableCell className="text-right">{entry.productionReserved ?? 0}</TableCell>
+                          <TableCell className="text-right font-semibold">{entry.available}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={statusVariant}>{statusVariant === 'destructive' ? 'RUPTURA' : statusVariant === 'warning' ? 'BAIXO' : 'OK'}</Badge>
                           </TableCell>
                         </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        {isExpanded && variantRows.length > 0 && (
+                          <TableRow key={`${entry.materialId}-variants`}>
+                            <TableCell className="border-none p-0" />
+                            <TableCell colSpan={6} className="border-none bg-muted/10 px-3 py-4 sm:px-6">
+                              <div className="space-y-3">
+                                <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Materiais Condicionados</p>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                  {variantRows.map((variant, variantIndex) => {
+                                    const summary =
+                                      variant.conditions
+                                        .map((cond) => `${cond.key}: ${cond.value}`)
+                                        .filter(Boolean)
+                                        .join(' • ') || 'Sem condições';
+                                    const variantKey = `${entry.materialId}-${variantIndex}-${summary}`;
+                                    return (
+                                      <div key={variantKey} className="rounded-2xl border border-border bg-background/70 p-3 shadow-sm">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-sm font-semibold">{summary}</p>
+                                          <span className="text-xs text-muted-foreground">
+                                            Solic: {variant.quantityRequested}
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-2 lg:grid-cols-3">
+                                          <div>
+                                            <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Reservado</p>
+                                            <p className="text-sm font-semibold text-foreground">{variant.reservedFromStock}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Produção</p>
+                                            <p className="text-sm font-semibold text-amber-600">{variant.qtyToProduce}</p>
+                                          </div>
+                                          <div>
+                                            <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Total</p>
+                                            <p className="text-sm font-semibold text-foreground">{variant.quantityRequested}</p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Cards - Visible only on Mobile */}
+            <div className="grid grid-cols-1 gap-4 md:hidden">
+              {stockView.map((entry) => {
+                const material = entry.material;
+                const statusVariant = entry.available <= 0 ? 'destructive' : material && entry.available <= material.minStock ? 'warning' : 'positive';
+                const variantRows = variantsByMaterial[entry.materialId] ?? [];
+                const hasVariants = variantRows.length > 0;
+                const isExpanded = Boolean(expandedVariantRows[entry.materialId] && hasVariants);
+
+                return (
+                  <div key={entry.materialId} className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/5 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-900 dark:text-slate-100">{material?.name}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">{entry.materialId}</p>
+                      </div>
+                      <Badge variant={statusVariant}>{statusVariant === 'destructive' ? 'RUPTURA' : statusVariant === 'warning' ? 'BAIXO' : 'OK'}</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 rounded-xl bg-white dark:bg-slate-900 p-3 border border-slate-100 dark:border-slate-800">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Em Estoque</p>
+                        <p className="text-sm font-bold">{entry.onHand}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Reservado</p>
+                        <p className="text-sm font-bold">{entry.reservedTotal}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Res. Prod</p>
+                        <p className="text-sm font-bold">{entry.productionReserved ?? 0}</p>
+                      </div>
+                      <div className="border-l border-slate-100 dark:border-slate-800 pl-3">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-indigo-500">Disponível</p>
+                        <p className="text-base font-black text-indigo-600 dark:text-indigo-400">{entry.available}</p>
+                      </div>
+                    </div>
+
+                    {hasVariants && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => toggleVariantRow(entry.materialId)}
+                        className="w-full h-8 text-xs uppercase font-bold tracking-widest"
+                      >
+                        {isExpanded ? (
+                          <>Ocultar Vertentes <ChevronUp className="ml-2 h-3.5 w-3.5" /></>
+                        ) : (
+                          <>Ver Vertentes ({variantRows.length}) <ChevronDown className="ml-2 h-3.5 w-3.5" /></>
+                        )}
+                      </Button>
+                    )}
+
+                    {isExpanded && variantRows.length > 0 && (
+                      <div className="mt-1 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {variantRows.map((variant, idx) => (
+                          <div key={idx} className="rounded-xl border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50/30 dark:bg-indigo-900/10 p-3">
+                            <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-2">
+                              {variant.conditions.map(c => `${c.key}: ${c.value}`).join(' • ')}
+                            </p>
+                            <div className="flex justify-between text-[11px]">
+                              <span>Res: <strong className="text-slate-900 dark:text-slate-100">{variant.reservedFromStock}</strong></span>
+                              <span>Prod: <strong className="text-amber-600">{variant.qtyToProduce}</strong></span>
+                              <span>Total: <strong className="text-slate-900 dark:text-slate-100">{variant.quantityRequested}</strong></span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       </TabsContent>

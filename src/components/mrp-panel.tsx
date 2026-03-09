@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { Material, StockBalance, Order, MrpSuggestion } from '@/lib/domain/types';
@@ -451,151 +452,244 @@ export default function MrpPanel() {
           <CardDescription>Itens abaixo do ponto de pedido / necessidades calculadas.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Material</TableHead>
-                <TableHead className="text-right">Disponível</TableHead>
-                <TableHead className="text-right">Consumo / Lead time</TableHead>
-                <TableHead className="text-right">Ponto pedido</TableHead>
-                <TableHead className="text-right">Sugestão</TableHead>
-                <TableHead className="text-right">Risco</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {suggestions.length === 0 ? (
+          {/* Desktop Table - Hidden on Mobile */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={8} className="border-none py-8 text-center text-sm text-muted-foreground">
-                    Nenhuma sugestão no momento.
-                  </TableCell>
+                  <TableHead>Material</TableHead>
+                  <TableHead className="text-right">Disponível</TableHead>
+                  <TableHead className="text-right">Consumo / Lead time</TableHead>
+                  <TableHead className="text-right">Ponto pedido</TableHead>
+                  <TableHead className="text-right">Sugestão</TableHead>
+                  <TableHead className="text-right">Risco</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ) : (
-                suggestions.map((s) => {
-                  const flowStatus = getSuggestionStatus(s.materialId);
-                  const riskVariant =
-                    s.riskScore > 70 ? 'destructive' : s.riskScore > 40 ? 'warning' : 'info';
-                  return (
-                    <React.Fragment key={s.materialId}>
-                      <TableRow>
-                        <TableCell className="max-w-[180px] sm:max-w-[220px]">
-                          <div className="font-semibold">{s.material?.name ?? s.materialId}</div>
-                          <p className="text-xs text-muted-foreground">
-                            {s.material?.sku ? `${s.material.sku} • ` : ''}
-                            {s.material?.description ?? s.persistedRationale}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">{s.available}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="text-sm font-semibold">{s.avgWeeklyDemand.toFixed(1)} /sem</div>
-                          <p className="text-xs text-muted-foreground">Lead {Math.round(s.leadTimeDays)} dias</p>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{s.suggestedReorderPoint}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="text-lg font-semibold">{s.suggestedQty}</div>
-                          <p className="text-xs text-muted-foreground">Min. {s.suggestedMinStock}</p>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end">
-                            <Badge variant={riskVariant}>{s.riskScore}%</Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{flowStatus.label}</p>
-                        </TableCell>
-                        <TableCell className="text-center space-y-1">
-                          <Badge variant={s.confirmed ? 'positive' : 'warning'}>{s.status}</Badge>
-                          {s.appliedAt ? (
-                            <p className="text-[11px] text-muted-foreground">
-                              Atualizado {formatDate(s.appliedAt)}
-                            </p>
-                          ) : (
-                            <p className="text-[11px] text-muted-foreground">Sem confirmação</p>
-                          )}
-                          <p className="text-[11px] text-muted-foreground">{s.persistedRationale}</p>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleExpand(s.materialId)}
-                              aria-label={
-                                expandedMaterialId === s.materialId ? 'Fechar histórico' : 'Ver histórico'
-                              }
-                            >
-                              {expandedMaterialId === s.materialId ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={confirmationBusy && pendingSuggestion?.materialId === s.materialId}
-                              onClick={() => handleOpenSuggestionDialog(s)}
-                            >
-                              {s.confirmed ? 'Atualizar sugestão' : 'Confirmar sugestão'}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={() => handleOpenDialog(s)}
-                              disabled={!s.confirmed || dialogBusy}
-                              title={!s.confirmed ? 'Confirme a sugestão antes de criar ordem' : undefined}
-                            >
-                              Criar ordem de produção
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      {expandedMaterialId === s.materialId && (
+              </TableHeader>
+              <TableBody>
+                {suggestions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="border-none py-8 text-center text-sm text-muted-foreground">
+                      Nenhuma sugestão no momento.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  suggestions.map((s) => {
+                    const flowStatus = getSuggestionStatus(s.materialId);
+                    const riskVariant =
+                      s.riskScore > 70 ? 'destructive' : s.riskScore > 40 ? 'warning' : 'info';
+                    return (
+                      <React.Fragment key={s.materialId}>
                         <TableRow>
-                          <TableCell colSpan={8} className="border-none p-3 sm:p-4">
-                            <div className="rounded-md border border-border/70 bg-muted/20 p-4">
-                              <div className="font-medium mb-2">{s.material?.name ?? s.materialId}</div>
-                              <div className="h-56">
-                                <ResponsiveContainer width="100%" height={220}>
-                                  <LineChart data={buildSeries(db, s.materialId)}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="label" />
-                                    <YAxis />
-                                    <Tooltip />
-                                    <Legend />
-                                    <Line
-                                      type="monotone"
-                                      dataKey="entries"
-                                      name="Entradas"
-                                      stroke="#2563eb"
-                                      dot={false}
-                                    />
-                                    <Line
-                                      type="monotone"
-                                      dataKey="production"
-                                      name="Produção"
-                                      stroke="#f59e0b"
-                                      dot={false}
-                                    />
-                                    <Line
-                                      type="monotone"
-                                      dataKey="outputs"
-                                      name="Saídas"
-                                      stroke="#10b981"
-                                      dot={false}
-                                    />
-                                  </LineChart>
-                                </ResponsiveContainer>
-                              </div>
+                          <TableCell className="max-w-[180px] sm:max-w-[220px]">
+                            <div className="font-semibold">{s.material?.name ?? s.materialId}</div>
+                            <p className="text-xs text-muted-foreground">
+                              {s.material?.sku ? `${s.material.sku} • ` : ''}
+                              {s.material?.description ?? s.persistedRationale}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">{s.available}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="text-sm font-semibold">{s.avgWeeklyDemand.toFixed(1)} /sem</div>
+                            <p className="text-xs text-muted-foreground">Lead {Math.round(s.leadTimeDays)} dias</p>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{s.suggestedReorderPoint}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="text-lg font-semibold">{s.suggestedQty}</div>
+                            <p className="text-xs text-muted-foreground">Min. {s.suggestedMinStock}</p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end">
+                              <Badge variant={riskVariant}>{s.riskScore}%</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{flowStatus.label}</p>
+                          </TableCell>
+                          <TableCell className="text-center space-y-1">
+                            <Badge variant={s.confirmed ? 'positive' : 'warning'}>{s.status}</Badge>
+                            {s.appliedAt ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                Atualizado {formatDate(s.appliedAt)}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground">Sem confirmação</p>
+                            )}
+                            <p className="text-[11px] text-muted-foreground">{s.persistedRationale}</p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => toggleExpand(s.materialId)}
+                                aria-label={
+                                  expandedMaterialId === s.materialId ? 'Fechar histórico' : 'Ver histórico'
+                                }
+                              >
+                                {expandedMaterialId === s.materialId ? (
+                                  <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                  <ChevronDown className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={confirmationBusy && pendingSuggestion?.materialId === s.materialId}
+                                onClick={() => handleOpenSuggestionDialog(s)}
+                              >
+                                {s.confirmed ? 'Atualizar sugestão' : 'Confirmar sugestão'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => handleOpenDialog(s)}
+                                disabled={!s.confirmed || dialogBusy}
+                                title={!s.confirmed ? 'Confirme a sugestão antes de criar ordem' : undefined}
+                              >
+                                Criar ordem de produção
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
-                      )}
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+                        {expandedMaterialId === s.materialId && (
+                          <TableRow>
+                            <TableCell colSpan={8} className="border-none p-3 sm:p-4">
+                              <div className="rounded-md border border-border/70 bg-muted/20 p-4">
+                                <div className="font-medium mb-2">{s.material?.name ?? s.materialId}</div>
+                                <div className="h-56">
+                                  <ResponsiveContainer width="100%" height={220}>
+                                    <LineChart data={buildSeries(db, s.materialId)}>
+                                      <CartesianGrid strokeDasharray="3 3" />
+                                      <XAxis dataKey="label" />
+                                      <YAxis />
+                                      <Tooltip />
+                                      <Legend />
+                                      <Line
+                                        type="monotone"
+                                        dataKey="entries"
+                                        name="Entradas"
+                                        stroke="#2563eb"
+                                        dot={false}
+                                      />
+                                      <Line
+                                        type="monotone"
+                                        dataKey="production"
+                                        name="Produção"
+                                        stroke="#f59e0b"
+                                        dot={false}
+                                      />
+                                      <Line
+                                        type="monotone"
+                                        dataKey="outputs"
+                                        name="Saídas"
+                                        stroke="#10b981"
+                                        dot={false}
+                                      />
+                                    </LineChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile Cards - Visible only on Mobile */}
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {suggestions.length === 0 ? (
+               <EmptyState title="Tudo em dia" description="Nenhuma escassez detectada." className="min-h-[140px]" />
+            ) : (
+              suggestions.map((s) => {
+                const flowStatus = getSuggestionStatus(s.materialId);
+                const riskVariant = s.riskScore > 70 ? 'destructive' : s.riskScore > 40 ? 'warning' : 'info';
+                return (
+                  <div key={s.materialId} className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/5 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                       <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-900 dark:text-slate-100 truncate">{s.material?.name ?? s.materialId}</p>
+                          <p className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider h-4">{s.material?.sku || 'SEM SKU'}</p>
+                       </div>
+                       <Badge variant={riskVariant} className="shrink-0">{s.riskScore}% RISCO</Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-lg p-2">
+                          <span className="text-[8px] uppercase font-bold text-slate-400 block">Disponível</span>
+                          <span className="font-bold text-lg">{s.available}</span>
+                       </div>
+                       <div className="bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-lg p-2">
+                          <span className="text-[8px] uppercase font-bold text-indigo-500 block">Sugestão</span>
+                          <span className="font-bold text-lg text-indigo-600 dark:text-indigo-400">{s.suggestedQty}</span>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                       <div className="flex flex-col gap-0.5">
+                          <span className="text-[8px] uppercase font-bold text-slate-400">Ponto Pedido</span>
+                          <span className="font-medium">{s.suggestedReorderPoint}</span>
+                       </div>
+                       <div className="flex flex-col gap-0.5 text-right">
+                          <span className="text-[8px] uppercase font-bold text-slate-400">Consumo Médio</span>
+                          <span className="font-medium">{s.avgWeeklyDemand.toFixed(1)} /sem</span>
+                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 py-1 justify-between">
+                       <Badge variant={s.confirmed ? 'positive' : 'warning'} className="text-[9px] h-5">{s.status}</Badge>
+                       <p className="text-[10px] text-muted-foreground font-medium">{flowStatus.label}</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                       <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            className="flex-1 h-10 font-bold text-xs"
+                            onClick={() => handleOpenSuggestionDialog(s)}
+                          >
+                            {s.confirmed ? 'Revisar' : 'Confirmar'}
+                          </Button>
+                          <Button 
+                            variant="outline"
+                            className="w-12 h-10 flex items-center justify-center"
+                            onClick={() => toggleExpand(s.materialId)}
+                          >
+                             {expandedMaterialId === s.materialId ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                       </div>
+                       <Button 
+                          className="w-full h-10 font-bold text-xs"
+                          disabled={!s.confirmed || dialogBusy}
+                          onClick={() => handleOpenDialog(s)}
+                       >
+                          Criar Ordem de Produção
+                       </Button>
+                    </div>
+
+                    {expandedMaterialId === s.materialId && (
+                       <div className="mt-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-2 overflow-hidden h-[180px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={buildSeries(db, s.materialId)}>
+                              <XAxis hide dataKey="label" />
+                              <YAxis hide />
+                              <Tooltip />
+                              <Line type="monotone" dataKey="outputs" name="Saídas" stroke="#10b981" dot={false} strokeWidth={2} />
+                              <Line type="monotone" dataKey="production" name="Produção" stroke="#f59e0b" dot={false} strokeWidth={2} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                       </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </CardContent>
       </Card>
 
