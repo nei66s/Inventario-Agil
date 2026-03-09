@@ -168,6 +168,7 @@ const SidebarProvider = React.forwardRef<
       }
 
       const onMove = (e: MouseEvent) => {
+        if (isMobile) return
         const cx = e.clientX
         const cy = e.clientY
         const viewportWidth = window.innerWidth

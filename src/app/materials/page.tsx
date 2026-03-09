@@ -374,72 +374,126 @@ export default function MaterialsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-              <TableRow>
-                <TableHead>Material</TableHead>
-                <TableHead>Operador</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Unidade</TableHead>
-                <TableHead className="text-right">Estoque mínimo</TableHead>
-                <TableHead className="text-right">Ponto de pedido</TableHead>
-                <TableHead className="text-right">Preparação (min)</TableHead>
-                <TableHead className="text-right">Produção por unidade (min)</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+            {/* Desktop Table - Hidden on Mobile */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Material</TableHead>
+                    <TableHead>Operador</TableHead>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Unidade</TableHead>
+                    <TableHead className="text-right">Estoque mínimo</TableHead>
+                    <TableHead className="text-right">Ponto de pedido</TableHead>
+                    <TableHead className="text-right">Preparação (min)</TableHead>
+                    <TableHead className="text-right">Produção por unidade (min)</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="border-none py-8">
+                        <EmptyState title="Carregando materiais..." description="Aguarde enquanto os dados chegam do servidor." className="min-h-[120px]" />
+                      </TableCell>
+                    </TableRow>
+                  ) : db.materials.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={11} className="border-none py-8">
+                        <EmptyState icon={Boxes} title="Nenhum material cadastrado" description="Cadastre um novo material para iniciar o planejamento." className="min-h-[120px]" />
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    db.materials.map((m: any) => {
+                      const metadata = m.metadata ?? {};
+                      const getMeta = (key: string) => metadata[key] || metadata[key.toLowerCase()] || '';
+                      const codigo = getMeta('Código') || getMeta('Codigo');
+                      const tipo = getMeta('Tipos') || getMeta('Produto');
+                      const dataValue = getMeta('Data') || getMeta('data');
+
+                      return (
+                        <TableRow key={m.id}>
+                          <TableCell>
+                            <p className="font-medium">{m.name}</p>
+                            <p className="text-xs text-muted-foreground">{m.sku}</p>
+                          </TableCell>
+                          <TableCell>{getMeta('Operador')}</TableCell>
+                          <TableCell>{codigo}</TableCell>
+                          <TableCell>{tipo}</TableCell>
+                          <TableCell>{dataValue ? formatDate(dataValue) : ''}</TableCell>
+                          <TableCell>{m.standardUom}</TableCell>
+                          <TableCell className="text-right">{m.minStock}</TableCell>
+                          <TableCell className="text-right">{m.reorderPoint}</TableCell>
+                          <TableCell className="text-right">{m.setupTimeMinutes}</TableCell>
+                          <TableCell className="text-right">{m.productionTimePerUnitMinutes}</TableCell>
+                          <TableCell className="text-right flex gap-2 justify-end">
+                            <Button variant="outline" size="sm" onClick={() => openEdit(m.id)} aria-label={`Editar ${m.name}`}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => deleteMaterial(m.id)} aria-label={`Remover ${m.name}`}>
+                              <Trash className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Cards - Visible only on Mobile */}
+            <div className="grid grid-cols-1 gap-4 md:hidden">
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="border-none py-8">
-                    <EmptyState title="Carregando materiais..." description="Aguarde enquanto os dados chegam do servidor." className="min-h-[120px]" />
-                  </TableCell>
-                </TableRow>
+                <EmptyState title="Carregando..." description="Buscando materiais" className="min-h-[100px]" />
               ) : db.materials.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="border-none py-8">
-                    <EmptyState icon={Boxes} title="Nenhum material cadastrado" description="Cadastre um novo material para iniciar o planejamento." className="min-h-[120px]" />
-                  </TableCell>
-                </TableRow>
+                <EmptyState icon={Boxes} title="Vazio" description="Clique em Novo Material" className="min-h-[100px]" />
               ) : (
                 db.materials.map((m: any) => {
                   const metadata = m.metadata ?? {};
                   const getMeta = (key: string) => metadata[key] || metadata[key.toLowerCase()] || '';
-                  const codigo = getMeta('Código') || getMeta('Codigo');
-                  const tipo = getMeta('Tipos') || getMeta('Produto');
-                  const dataValue = getMeta('Data') || getMeta('data');
-
                   return (
-                    <TableRow key={m.id}>
-                      <TableCell>
-                        <p className="font-medium">{m.name}</p>
-                        <p className="text-xs text-muted-foreground">{m.sku}</p>
-                      </TableCell>
-                      <TableCell>{getMeta('Operador')}</TableCell>
-                      <TableCell>{codigo}</TableCell>
-                      <TableCell>{tipo}</TableCell>
-                      <TableCell>{dataValue ? formatDate(dataValue) : ''}</TableCell>
-                      <TableCell>{m.standardUom}</TableCell>
-                      <TableCell className="text-right">{m.minStock}</TableCell>
-                      <TableCell className="text-right">{m.reorderPoint}</TableCell>
-                      <TableCell className="text-right">{m.setupTimeMinutes}</TableCell>
-                      <TableCell className="text-right">{m.productionTimePerUnitMinutes}</TableCell>
-                      <TableCell className="text-right flex gap-2 justify-end">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(m.id)} aria-label={`Editar ${m.name}`}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteMaterial(m.id)} aria-label={`Remover ${m.name}`}>
-                          <Trash className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    <div key={m.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-muted/5 p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-900 dark:text-slate-100">{m.name}</p>
+                          <p className="text-[10px] uppercase tracking-wider text-indigo-500 font-semibold">{m.sku || 'SEM SKU'}</p>
+                        </div>
+                        <div className="flex gap-1">
+                           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => openEdit(m.id)}>
+                             <Edit className="h-4 w-4" />
+                           </Button>
+                           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteMaterial(m.id)}>
+                             <Trash className="h-4 w-4" />
+                           </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Operador</p>
+                          <p className="font-medium truncate">{getMeta('Operador') || '-'}</p>
+                        </div>
+                        <div className="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Tipo</p>
+                          <p className="font-medium truncate">{getMeta('Tipos') || getMeta('Produto') || '-'}</p>
+                        </div>
+                        <div className="bg-slate-100/50 dark:bg-slate-800/50 p-2 rounded-lg">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Min / Ponto</p>
+                          <p className="font-bold">{m.minStock} / {m.reorderPoint}</p>
+                        </div>
+                        <div className="bg-slate-100/50 dark:bg-slate-800/50 p-2 rounded-lg">
+                          <p className="text-[8px] uppercase font-bold text-slate-400">Tempo Prod</p>
+                          <p className="font-bold">{m.productionTimePerUnitMinutes} min/un</p>
+                        </div>
+                      </div>
+                    </div>
                   );
                 })
               )}
-            </TableBody>
-          </Table>
+            </div>
           </CardContent>
         </Card>
 

@@ -4,6 +4,15 @@ Este arquivo contém o registro cronológico de todas as modificações realizad
 
 ---
 
+* 7ebaa8f - feat: auditoria completa de layout responsivo, padronização mobile-first e navegação híbrida (2026-03-09) [Antigravity]
+    - Implementação de layouts baseados em cartões para todas as tabelas no mobile.
+    - Otimização do Dashboard com grid de 2 colunas e KPIs compactos para celular.
+    - Nova navegação híbrida: Sidebar (Desktop) e Downbar + Menu Inteligente (Mobile).
+    - Inclusão de acesso rápido a MRP, Perfil, Lixeira e Logout no menu móvel.
+    - Correções de acessibilidade (Radix UI) e limpeza de redundâncias visuais no menu.
+    - Ajustes de padding e tipografia premium em toda a interface.
+
+
 * b4b7e5f - fix: restore dashboard and store missing exports, enhance realtime indicators (2026-02-28) [toto289]
 * 1119e73 - fix(auth): normalize 401 responses and prevent dashboard refresh crash (2026-02-28) [toto289]
 * a037fef - feat: mount realtime listener in authenticated layout (2026-02-23) [toto289]

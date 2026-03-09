@@ -481,62 +481,69 @@ export default function OrdersPage() {
   return (
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
       <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex min-w-0 flex-col">
-              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
-                <div className="ml-0">
-                  <Select value={mainView} onValueChange={(v) => setMainView(v as 'open' | 'finalized')}>
-                    <SelectTrigger className="w-full sm:w-40">
-                      <SelectValue placeholder="Pedidos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="open">Pedidos</SelectItem>
-                      <SelectItem value="finalized">Pedidos finalizados</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="ml-0">
-                  <Select value={subView} onValueChange={(v) => setSubView(v as 'mine' | 'all')}>
-                    <SelectTrigger className="w-full sm:w-40">
-                      <SelectValue placeholder="Filtrar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mine">Meus pedidos</SelectItem>
-                      <SelectItem value="all">Todos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="ml-0">
-                  <Select value={mrpView} onValueChange={(value) => setMrpView(value as 'all' | 'mrp' | 'standard')}>
-                    <SelectTrigger className="w-full sm:w-40">
-                      <SelectValue placeholder="Origem" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="mrp">Somente MRP</SelectItem>
-                      <SelectItem value="standard">Pedidos normais</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="ml-0 w-full sm:w-auto relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Pesquisar..."
-                    className="pl-8 bg-background"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-xl font-bold flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-indigo-500" />
+              Gestão de Pedidos
+            </CardTitle>
+            <Button onClick={handleNewOrder} size="default" className="w-full sm:w-auto shadow-md">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Novo Pedido
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+              <div className="w-full lg:w-44">
+                <Select value={mainView} onValueChange={(v) => setMainView(v as 'open' | 'finalized')}>
+                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50">
+                    <SelectValue placeholder="Visualização" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Abertos / Em curso</SelectItem>
+                    <SelectItem value="finalized">Concluídos</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <CardDescription className="mt-2 truncate">Reserva em tempo real (TTL + heartbeat).</CardDescription>
+              <div className="w-full lg:w-44">
+                <Select value={subView} onValueChange={(v) => setSubView(v as 'mine' | 'all')}>
+                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50">
+                    <SelectValue placeholder="Filtrar por" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mine">Meus pedidos</SelectItem>
+                    <SelectItem value="all">Todos os pedidos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full lg:w-44">
+                <Select value={mrpView} onValueChange={(value) => setMrpView(value as 'all' | 'mrp' | 'standard')}>
+                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50">
+                    <SelectValue placeholder="Origem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as origens</SelectItem>
+                    <SelectItem value="mrp">Somente MRP</SelectItem>
+                    <SelectItem value="standard">Pedidos manuais</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="ml-0 w-full shrink-0 sm:ml-2 sm:w-auto mt-2 sm:mt-0">
-              <Button onClick={handleNewOrder} size="sm" className="w-full sm:w-auto">
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Novo
-              </Button>
+            
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Pesquisar por número ou cliente..."
+                className="w-full pl-10 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200/60 dark:border-slate-800/60"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
+            
+            <CardDescription className="text-xs italic">
+              * Reservas em tempo real com renovação automática (heartbeat).
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
