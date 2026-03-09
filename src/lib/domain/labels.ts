@@ -1,6 +1,6 @@
 'use client';
 
-import QRCode from 'qrcode';
+
 import { jsPDF } from 'jspdf';
 import { LabelFormat, Order } from './types';
 
@@ -89,19 +89,7 @@ function simpleDate(value?: string): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-async function addQr(
-  pdf: any,
-  order: Order,
-  pageIndex: number,
-  format: LabelFormat,
-  x: number,
-  y: number,
-  size: number
-) {
-  const payload = `${order.orderNumber}|${format}|PAGE:${pageIndex + 1}`;
-  const qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 180 });
-  pdf.addImage(qrDataUrl, 'PNG', x, y, size, size);
-}
+
 
 type LabelRenderContext = {
   pdf: any;

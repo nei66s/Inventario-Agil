@@ -20,7 +20,8 @@
     "lint": "eslint src eslint.config.mjs next.config.ts tailwind.config.ts --ext .ts,.tsx,.mjs",
     "typecheck": "tsc --noEmit",
     "clear-db": "node ./scripts/clear-db.js",
-    "db:migrate": "node ./scripts/run-migrations.js"
+    "db:migrate": "node ./scripts/run-migrations.js",
+    "audit:dashboard": "node scripts/run-speed-insights-dashboard.js"
   },
   "dependencies": {
     "@flags-sdk/vercel": "^1.0.1",

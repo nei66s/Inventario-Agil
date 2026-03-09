@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 
-type Params = { params: { categoryId: string; valueId: string } }
+
 
 export async function DELETE(_request: Request, context: any) {
   try {

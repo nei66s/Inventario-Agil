@@ -19,16 +19,7 @@ import type { Order } from '@/lib/domain/types';
 import { EmptyState } from '@/components/ui/empty-state';
 import { productionTaskStatusLabel } from '@/lib/domain/i18n';
 import { notifyDataRefreshed } from '@/lib/data-refresh';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 type ProductionTask = {
   id: string;

@@ -457,7 +457,7 @@ export default function OrdersPage() {
     if (conditionPickerTarget && conditionPickerTarget.orderId !== selectedOrder.id) {
       setConditionPickerTarget(null);
     }
-  }, [selectedOrder?.id, conditionPickerTarget]);
+  }, [selectedOrder?.id, conditionPickerTarget, selectedOrder]);
 
   const stockByMaterial = React.useMemo(() => {
     const map = new Map<string, { onHand: number; reservedTotal: number; productionReserved: number; available: number }>();

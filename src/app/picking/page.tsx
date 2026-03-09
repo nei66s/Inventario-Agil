@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 import { generateLabelPdf } from '@/lib/domain/labels';
 import { readinessLabel, readinessTabLabel } from '@/lib/domain/i18n';
 import { notifyDataRefreshed } from '@/lib/data-refresh';

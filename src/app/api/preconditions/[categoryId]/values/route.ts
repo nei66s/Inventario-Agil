@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 
-type Params = { params: { categoryId: string } }
+
 
 export async function POST(request: Request, { params }: any) {
   try {

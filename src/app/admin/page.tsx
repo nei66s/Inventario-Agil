@@ -6,12 +6,13 @@ import { Shield, UserX, Trash2, CheckCircle, Save, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuthUser } from '@/hooks/use-auth';
-import { Role } from '@/lib/domain/types';
+import { Role } from '@/lib/domain/types'; // Role is still needed for AccountForm and roleOptions
 import { roleLabel } from '@/lib/domain/i18n';
 
 type AccountForm = {
@@ -50,7 +51,6 @@ export default function AdminPage() {
   const [logoFileName, setLogoFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [loadingBranding, setLoadingBranding] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchUsers = useCallback(async () => {
@@ -99,12 +99,10 @@ export default function AdminPage() {
         setAddress(payload.address || '');
         setLogoDataUrl(payload.logoDataUrl);
         setLogoFileName(payload.logoDataUrl ? 'Logo salvo' : null);
-        setLoadingBranding(false);
       })
       .catch(() => {
         if (!active) return;
         setCompanyName((prev) => prev || 'Black Tower X');
-        setLoadingBranding(false);
       });
     return () => {
       active = false;
@@ -340,7 +338,6 @@ export default function AdminPage() {
   }, [users, searchTerm]);
 
   const previewLogo = logoDataUrl ?? '/black-tower-x-transp.png';
-  const previewCompanyName = loadingBranding ? 'Carregando...' : companyName || 'Black Tower X';
 
   if (authLoading) {
     return (

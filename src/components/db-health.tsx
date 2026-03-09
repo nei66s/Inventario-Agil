@@ -58,7 +58,7 @@ export default function DbHealth() {
       role="status"
       aria-label={`Banco de dados: ${cfg.label}`}
       title={`Banco de dados: ${cfg.label}`}
-      className={`inline-flex w-fit items-center gap-1 rounded-2xl border ${cfg.border} ${cfg.bg} px-2 py-1 text-slate-700 shadow-sm transition`}
+      className={`inline-flex w-fit items-center gap-1 rounded-2xl border ${cfg.border} ${cfg.bg} px-2 py-1 text-slate-700 shadow-sm transition hover:scale-110 cursor-help`}
     >
       <Database className={`${cfg.iconColor} ${status === 'loading' ? 'animate-spin' : ''} h-5 w-5`} />
       <span className="sr-only">{cfg.label}</span>

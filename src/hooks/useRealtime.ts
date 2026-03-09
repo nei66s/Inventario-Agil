@@ -30,12 +30,14 @@ export function useRealtime() {
         function connect() {
             if (!isMounted) return;
 
-            const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "wss://ws.blacktowerx.com.br/";
+            const wsUrl = process.env.NEXT_PUBLIC_WS_URL?.trim();
 
             console.log("[realtime] Attempting to connect to:", wsUrl);
 
             if (!wsUrl) {
-                console.warn("[realtime] NEXT_PUBLIC_WS_URL is not set and no fallback.");
+                console.info("[realtime] WebSocket disabled: NEXT_PUBLIC_WS_URL is not configured.");
+                setIsConnected(false);
+                setIsConnecting(false);
                 return;
             }
 
@@ -89,7 +91,9 @@ export function useRealtime() {
                 };
 
                 ws.onerror = (err) => {
-                    console.error("[realtime] 🚨 WebSocket error:", err);
+                    // Browser WebSocket error events are opaque and commonly occur during reconnect.
+                    // Keep this as warning so local dev is not blocked by noisy console overlays.
+                    console.warn("[realtime] WebSocket error:", err);
                     ws.close();
                 };
             } catch (err) {
@@ -121,5 +125,5 @@ export function useRealtime() {
                 setIsConnected(false);
             }
         };
-    }, [router, setIsConnected]);
+    }, [router, setIsConnected, setIsConnecting]);
 }

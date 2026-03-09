@@ -1,14 +1,13 @@
 "use client";
 
-import { AlertTriangle, Factory, ShoppingCart, ShieldAlert, Plus, Users, Clock, Award, TrendingDown, TrendingUp, Scale, ListChecks, BarChart3 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { AlertTriangle, Factory, ShoppingCart, ShieldAlert, Users, Clock, Award, TrendingDown, TrendingUp, Scale, ListChecks, BarChart3 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer } from '@/components/ui/chart';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { KpiCard } from '@/components/ui/kpi-card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { formatDate } from '@/lib/utils';
 import { readinessLabel, dashboardLabels } from '@/lib/domain/i18n';
 import { DashboardData } from '@/lib/repository/dashboard';
@@ -168,9 +167,9 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
   const orders = data.orders;
   const productionTasks = data.productionTasks;
 
-  const activeOrders = orders.filter((o) => !o.trashedAt);
-  const openOrders = activeOrders.filter((item) => item.status === 'ABERTO').length;
-  const tasksPending = productionTasks.filter((item) => item.status !== 'DONE').length;
+  const activeOrders = useMemo(() => orders.filter((o) => !o.trashedAt), [orders]);
+  const openOrders = useMemo(() => activeOrders.filter((item) => item.status === 'ABERTO').length, [activeOrders]);
+  const tasksPending = useMemo(() => productionTasks.filter((item) => item.status !== 'DONE').length, [productionTasks]);
   const unread = data.notifications.filter((item) => !item.readAt).length;
 
   const lowStock = stockView.filter((item) => item.material && item.available <= item.material.minStock);
@@ -280,24 +279,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
 
 
 
-  const selectedOrder = orders.find((order) => order.id === selectedOrderId) ?? null;
-
-  const stockByMaterial = useMemo(() => {
-    const map = new Map<string, { onHand: number; reservedTotal: number; available: number }>();
-    data.stockBalances.forEach((balance) => {
-      map.set(balance.materialId, {
-        onHand: balance.onHand,
-        reservedTotal: balance.reservedTotal,
-        available: Math.max(0, balance.onHand - balance.reservedTotal),
-      });
-    });
-    return map;
-  }, [data.stockBalances]);
-
-  const producingSet = useMemo(
-    () => new Set(productionTasks.filter((task) => task.status !== 'DONE').map((task) => task.orderId)),
-    [productionTasks]
-  );
+  // Removed unused selectedOrder, stockByMaterial, and producingSet
 
   const finishedCount = activeOrders.filter((order) => isFinalizedStatus(order.status)).length;
   const ordersInSeparation = activeOrders.filter((order) => isInSeparationStatus(order.status)).length;
@@ -305,7 +287,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
     const buckets: string[] = [];
     if (period === 'month') {
       const [year, month] = selectedMonth.split('-').map(Number);
-      const first = new Date(year, month - 1, 1);
+      // Removed unused first
       const last = new Date(year, month, 0);
       for (let day = 1; day <= last.getDate(); day++) {
         const entry = new Date(year, month - 1, day).toISOString().slice(0, 10);
@@ -334,7 +316,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
       const finalized = ordersOnBucket.filter((order) => isFinalizedStatus(order.status)).length;
       return { date: bucket, created, inSeparation, finalized };
     });
-  }, [activeOrders, period, selectedMonth]);
+  }, [activeOrders, period, selectedMonth, orders]);
 
   const formatBucketLabel = (label?: string | number) => {
     const parsed = parseBucketToDate(label);
