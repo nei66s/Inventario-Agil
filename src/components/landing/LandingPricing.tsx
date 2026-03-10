@@ -118,7 +118,7 @@ export function LandingPricing() {
 
                                 <div className="mt-auto space-y-4">
                                     <Button size="lg" className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold shadow-xl shadow-indigo-500/20 transform transition-all active:scale-95" asChild>
-                                        <Link href="https://www.asaas.com/c/9acmyekjvena8wub">
+                                        <Link href="/register">
                                             Começar Agora <ArrowRight className="ml-2 h-6 w-6" />
                                         </Link>
                                     </Button>

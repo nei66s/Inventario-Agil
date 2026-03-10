@@ -1,34 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { sendTelegramMessage } from '@/lib/telegram';
+import { asaas } from '@/lib/billing/asaas';
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
         const { event, subscription, status } = body;
+        const asaasCustomerId = body.payment?.customer;
 
-        console.log('[Asaas Webhook]', event, subscription);
+        console.log('[Asaas Webhook]', event, subscription, asaasCustomerId);
 
         const pool = getPool();
 
         // 1. Check if it's a payment confirmation
         if (event === 'PAYMENT_RECEIVED' || event === 'PAYMENT_CONFIRMED' || status === 'RECEIVED' || status === 'CONFIRMED') {
-            const tenantRes = await pool.query(
-                "SELECT name FROM tenants WHERE asaas_subscription_id = $1 OR asaas_customer_id = $2 LIMIT 1",
-                [subscription, body.payment?.customer]
-            );
-            const tenantName = tenantRes.rows[0]?.name || 'Empresa Desconhecida';
 
-            if (subscription) {
-                // Update based on subscription ID
+            // Try to find the tenant by IDs (Customer ID or Subscription ID)
+            let tenantRes = await pool.query(
+                "SELECT id, name FROM tenants WHERE asaas_customer_id = $1 OR asaas_subscription_id = $2 LIMIT 1",
+                [asaasCustomerId, subscription || body.payment?.subscription]
+            );
+
+            let tenant = tenantRes.rows[0];
+
+            // If not found, try to find by identifying the customer email in Asaas
+            if (!tenant && asaasCustomerId) {
+                try {
+                    const asaasCustomer = await asaas.getCustomer(asaasCustomerId);
+                    if (asaasCustomer?.email) {
+                        tenantRes = await pool.query(
+                            `SELECT t.id, t.name 
+                             FROM tenants t
+                             JOIN users u ON u.tenant_id = t.id
+                             WHERE u.email = $1 AND u.role = 'Admin'
+                             LIMIT 1`,
+                            [asaasCustomer.email.toLowerCase()]
+                        );
+                        tenant = tenantRes.rows[0];
+                    }
+                } catch (e) {
+                    console.error('[Asaas Webhook] Error fetching customer from Asaas', e);
+                }
+            }
+
+            const tenantName = tenant?.name || 'Empresa Desconhecida';
+            const tenantId = tenant?.id;
+
+            if (tenantId) {
+                // Update based on tenant ID
                 await pool.query(
-                    "UPDATE tenants SET subscription_status = 'ACTIVE', subscription_expires_at = NOW() + INTERVAL '32 days' WHERE asaas_subscription_id = $1",
-                    [subscription]
-                );
-            } else if (body.payment?.subscription) {
-                await pool.query(
-                    "UPDATE tenants SET subscription_status = 'ACTIVE', subscription_expires_at = NOW() + INTERVAL '32 days' WHERE asaas_subscription_id = $1",
-                    [body.payment.subscription]
+                    `UPDATE tenants 
+                     SET subscription_status = 'ACTIVE', 
+                         subscription_expires_at = NOW() + INTERVAL '32 days',
+                         asaas_customer_id = $1,
+                         asaas_subscription_id = COALESCE($2, asaas_subscription_id)
+                     WHERE id = $3`,
+                    [asaasCustomerId, subscription || body.payment?.subscription || null, tenantId]
                 );
             }
 

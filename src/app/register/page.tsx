@@ -60,9 +60,9 @@ export default function RegisterPage() {
             }
 
             setSuccess(true);
-            // Aguarda 3 segundos e redireciona para o login
+            // Redireciona para o pagamento do Asaas após 3 segundos
             setTimeout(() => {
-                router.push('/login');
+                window.location.href = 'https://www.asaas.com/c/9acmyekjvena8wub';
             }, 3000);
 
         } catch (err: any) {
@@ -83,11 +83,12 @@ export default function RegisterPage() {
                     </div>
                     <div className="space-y-4">
                         <h1 className="text-3xl font-black font-headline text-slate-900 dark:text-white">
-                            Conta Criada com Sucesso!
+                            Configurando sua Instância...
                         </h1>
                         <p className="text-slate-600 dark:text-slate-400">
-                            Sua instância do <strong>Inventário Ágil</strong> está pronta. <br />
-                            Estamos redirecionando você agora...
+                            Sua conta foi criada! <br />
+                            <strong>Estamos te redirecionando para o checkout...</strong><br />
+                            Complete o pagamento de R$ 5 para ativar seu painel.
                         </p>
                     </div>
                     <div className="pt-4">

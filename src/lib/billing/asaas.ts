@@ -59,5 +59,9 @@ export const asaas = {
 
     async getSubscription(id: string): Promise<AsaasSubscription> {
         return asaasFetch(`/subscriptions/${id}`);
+    },
+
+    async getCustomer(id: string): Promise<AsaasCustomer> {
+        return asaasFetch(`/customers/${id}`);
     }
 };
