@@ -251,10 +251,17 @@ export default function PlatformTenantsPage() {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
     const [refreshing, setRefreshing] = useState(false);
 
+    const [notLoggedIn, setNotLoggedIn] = useState(false);
+
     const fetchTenants = useCallback(async () => {
         setRefreshing(true);
         try {
             const res = await fetch('/api/platform/tenants');
+            if (res.status === 401) {
+                // Not logged in — redirect to login
+                setNotLoggedIn(true);
+                return;
+            }
             if (!res.ok) {
                 const d = await res.json();
                 setError(d.message ?? 'Erro ao carregar tenants');
@@ -272,6 +279,14 @@ export default function PlatformTenantsPage() {
     }, []);
 
     useEffect(() => { fetchTenants(); }, [fetchTenants]);
+
+    // Redirect if not logged in
+    useEffect(() => {
+        if (notLoggedIn) {
+            window.location.href = '/login?redirect=/platform/tenants';
+        }
+    }, [notLoggedIn]);
+
 
     const handleStatusChange = async (tenantId: string, status: Tenant['status'], reason?: string) => {
         const res = await fetch('/api/platform/tenants', {

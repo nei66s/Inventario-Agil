@@ -20,31 +20,46 @@ export async function POST(req: NextRequest) {
 
         await client.query('BEGIN');
 
-        // 1. Criar Tenant
+        // 1. Criar Tenant (Inicia como PENDING para aprovação manual do Super Admin)
         const tenantRes = await client.query(
-            'INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id',
+            "INSERT INTO tenants (name, slug, status) VALUES ($1, $2, 'PENDING') RETURNING id",
             [tenantName, slug]
         );
         const tenantId = tenantRes.rows[0].id;
 
         // 2. Criar Configurações de Site do Tenant (RLS protege a escrita)
-        // Nota: Aqui precisamos resetar o tenant_id da sessão pois essa é uma rota pública 
-        // e o insert precisa ter o tenant_id correto.
         await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(tenantId)}`);
 
         await client.query(
             `INSERT INTO site_settings (id, tenant_id, company_name, platform_label) 
-       VALUES ($1, $2, $3, $4)`,
+             VALUES ($1, $2, $3, $4)`,
             ['primary', tenantId, tenantName, 'Inventário Ágil']
         );
+
+        // 4. Seed Data (Onboarding)
+        // Adicionar Unidades de Medida padrão
+        const seedUOMs = [
+            ['UN', 'Unidade'],
+            ['KG', 'Quilograma'],
+            ['MT', 'Metros'],
+            ['PCT', 'Pacote']
+        ];
+
+        for (const [code, desc] of seedUOMs) {
+            await client.query(
+                `INSERT INTO uoms (code, description, tenant_id) VALUES ($1, $2, $3)`,
+                [code, desc, tenantId]
+            );
+        }
 
         // 3. Criar Usuário Admin do Tenant
         const userId = `usr-${Math.random().toString(36).substring(2, 10)}`;
         await client.query(
             `INSERT INTO users (id, name, email, password_hash, role, tenant_id) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+             VALUES ($1, $2, $3, $4, $5, $6)`,
             [userId, 'Administrador', adminEmail.toLowerCase(), passwordHash, 'Admin', tenantId]
         );
+
 
         await client.query('COMMIT');
 

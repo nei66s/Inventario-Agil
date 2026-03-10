@@ -2,19 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthPayload } from '@/lib/auth';
 import { getPool } from '@/lib/db';
 
-function requirePlatformAdmin(req: NextRequest) {
-    const payload = getAuthPayload(req);
-    if (!payload) {
-        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
-    }
-    // Must be an Admin AND their tenant must be the platform owner tenant
-    // We check via a flag on the user
-    return payload;
-}
 
 export async function GET(req: NextRequest) {
     const auth = getAuthPayload(req);
-    if (!auth || auth.role !== 'Admin') {
+    // 401 = not logged in at all → frontend will redirect to /login
+    if (!auth) {
+        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
+    }
+    // 403 = logged in but not an admin
+    if (auth.role !== 'Admin') {
         return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
 
@@ -58,7 +54,11 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
     const auth = getAuthPayload(req);
-    if (!auth || auth.role !== 'Admin') {
+    // 401 = not logged in at all
+    if (!auth) {
+        return NextResponse.json({ message: 'Não autenticado' }, { status: 401 });
+    }
+    if (auth.role !== 'Admin') {
         return NextResponse.json({ message: 'Acesso negado' }, { status: 403 });
     }
 

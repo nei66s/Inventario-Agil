@@ -13,8 +13,13 @@ Este documento detalha as tarefas necessárias para transformar as promessas do 
 - [x] **Infraestrutura Escalável**
   - [x] Migrar para um setup multitenant via RLS (Row-Level Security)
   - [x] Criar formulário de self-service onboarding.
-- [ ] **Módulo de Faturamento / Billing (MVP)**
-  - [ ] Desenvolver a lógica de ativação de conta ativa e gerir bloqueios via sistema de pagamentos ou ativação manual do admin.
+- [x] **Módulo de Faturamento / Billing (MVP)**
+  - [x] Lógica de aprovação manual via Painel Super Admin (Tenants iniciam como PENDING).
+  - [x] Bloqueio automático de login para tenants BLOCKED ou PENDING.
+  - [ ] Integração com gateway de pagamentos (Stripe/Asaas).
+- [x] **Onboarding Seed Data**
+  - [x] Criação automática de UOMs (UN, KG, MT, PCT) para novos tenants.
+
 
 ---
 
