@@ -24,8 +24,26 @@ const sourceCodePro = Source_Code_Pro({
 });
 
 export const metadata: Metadata = {
-  title: 'Inventário Ágil',
-  description: 'Gerencie eficientemente sua cadeia de suprimentos, do pedido a entrega.',
+  title: {
+    default: 'Inventário Ágil | Warehouse Management System Inteligente',
+    template: '%s | Inventário Ágil',
+  },
+  description: 'A próxima geração da gestão logística em tempo real. IA preditiva, reservas instantâneas e controle total da sua cadeia de suprimentos.',
+  keywords: ['WMS', 'SaaS', 'logística', 'estoque', 'IA', 'gestão de armazém', 'MRP'],
+  authors: [{ name: 'Black Tower X' }],
+  openGraph: {
+    title: 'Inventário Ágil - Gestão Logística em Tempo Real',
+    description: 'Resolva o gap entre vendas e produção com nossa IA preditiva e WMS de alta performance.',
+    url: 'https://inventario-agil.vercel.app',
+    siteName: 'Inventário Ágil',
+    locale: 'pt-BR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Inventário Ágil',
+    description: 'Gestão logística inteligente e realtime.',
+  },
 };
 
 export default function RootLayout({

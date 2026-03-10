@@ -54,11 +54,16 @@ Atualmente gerenciado via tabelas para:
 - `inventory_receipts`: Controle de entradas.
 - `production_tasks`: Gerenciamento de fila de fábrica.
 
-## 🚀 Estratégia de Deploy
+## 🌐 Camada SaaS & Marketing
 
-- **PM2**: Utilizado para gerenciar instâncias em servidores Linux/Windows.
-- **Cluster Mode**: Maximiza o uso de CPU.
-- **Scripts**: `npm run pm2:start` inicia o processo com as configurações em `ecosystem.config.js`.
+O sistema evoluiu para uma estrutura SaaS (Software as a Service) com suporte a multi-branding e páginas institucionais:
+
+- **Site Branding**: Gerenciado dinamicamente via `useSiteBranding()` e tabela `site_settings`. Permite personalizar o nome da empresa e logo sem alteração de código.
+- **Landing Page**: Implementada no `src/app/page.tsx` com componentes modulares para marketing (Hero, Features, Pricing).
+- **Roadmap & Security**: Páginas dedicadas para transparência técnica e retenção de leads B2B.
+
+---
+## 🚀 Estratégia de Deploy
 
 ---
 Consulte o arquivo [blueprint.md](./blueprint.md) para os requisitos originais de design.

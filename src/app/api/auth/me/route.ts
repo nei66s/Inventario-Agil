@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await getPool().query(
-      'SELECT id, name, email, role, avatar_url FROM users WHERE id = $1',
+      'SELECT id, name, email, role, tenant_id, avatar_url FROM users WHERE id = $1',
       [payload.userId]
     );
     if (result.rowCount === 0) {
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
         name: user.name,
         email: user.email,
         role: user.role,
+        tenantId: user.tenant_id,
         avatarUrl: user.avatar_url ?? undefined,
       },
     });
