@@ -36,14 +36,14 @@ const features = [
     },
     {
         icon: Cloud,
-        title: 'Cloud Managed',
-        description: 'Infraestrutura robusta e escalável, pronta para acompanhar o crescimento do seu negócio.',
+        title: 'Web App Otimizado',
+        description: 'Acesse de qualquer navegador moderno ou tablet no chão de fábrica.',
         color: 'bg-cyan-500',
     },
     {
         icon: Lock,
-        title: 'Segurança Enterprise',
-        description: 'Controle de acesso granular (RBAC) e trilha de auditoria completa em cada operação.',
+        title: 'Trilha de Auditoria Parcial',
+        description: 'Bases para controle de acesso restrito (RLS) protegendo seus dados de ponta a ponta.',
         color: 'bg-red-500',
     },
 ];
