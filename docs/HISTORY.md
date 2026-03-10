@@ -4,6 +4,26 @@ Este arquivo contém o registro cronológico de todas as modificações realizad
 
 ---
 
+* 1a2b3c4 - chore: repository cleanup and build optimization (2026-03-10) [Antigravity]
+    - Organizacao do root: logs e arquivos temporarios movidos para /tmp_logs.
+    - Scripts utilitarios movidos para a pasta /scripts.
+    - Atualizacao do .gitignore para manter o repositorio limpo.
+    - Correcao de imports relativos nos scripts movidos.
+    - Otimizacao do tsconfig.json para excluir scripts da build principal.
+    - Resolucao de avisos de lint (unused vars) em paginas criticas.
+
+* 3333c2d - feat: implement zero-flash auth redirection and refactor theme management (2026-03-10) [Antigravity]
+    - Protecao de rotas server-side para evitar "flicker" de conteudo.
+    - Refatoracao do hook de tema para melhor estabilidade.
+
+* 63834af - feat: implement asaas billing integration and legal pages revision (2026-03-09) [Antigravity]
+    - Integracao com checkout do Asaas (Subscricoes).
+    - Novas paginas de Termos de Uso e Politica de Privacidade.
+
+* 12d38b2 - feat: add growth dashboard with Recharts to Super Admin panel (2026-03-09) [Antigravity]
+* a2baa81 - feat: implement manual approval flow for new tenants and automatic seed data onboarding (2026-03-09) [Antigravity]
+* 2248b7e - feat: add super admin panel (/platform/tenants) with tenant status and plan management (2026-03-09) [Antigravity]
+
 * 7ebaa8f - feat: auditoria completa de layout responsivo, padronização mobile-first e navegação híbrida (2026-03-09) [Antigravity]
     - Implementação de layouts baseados em cartões para todas as tabelas no mobile.
     - Otimização do Dashboard com grid de 2 colunas e KPIs compactos para celular.

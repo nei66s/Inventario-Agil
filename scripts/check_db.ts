@@ -1,4 +1,4 @@
-import { query } from './src/lib/db';
+import { query } from '../src/lib/db';
 async function run() {
     try {
         const res = await query("SELECT id, order_number, status, source, trashed_at FROM orders");

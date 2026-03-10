@@ -10,8 +10,8 @@ export function LandingHero() {
         <section className="relative overflow-hidden pt-32 pb-20 md:pt-48 md:pb-32">
             {/* Background elements */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none -z-10">
-                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[120px]" />
-                <div className="absolute bottom-[10%] left-[-10%] w-[400px] h-[400px] bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-[100px]" />
+                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[80px]" />
+                <div className="absolute bottom-[10%] left-[-10%] w-[400px] h-[400px] bg-blue-500/10 dark:bg-blue-500/20 rounded-full blur-[64px]" />
             </div>
 
             <div className="max-w-7xl mx-auto px-6">
@@ -51,14 +51,16 @@ export function LandingHero() {
                         </div>
                     </div>
 
-                    <div className="relative animate-in fade-in zoom-in duration-1000 delay-300">
-                        <div className="relative z-10 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm p-4 shadow-2xl">
+                    <div className="relative animate-in fade-in zoom-in duration-1000">
+                        <div className="relative z-10 rounded-[32px] border border-slate-200/50 dark:border-slate-800/50 bg-white/50 dark:bg-slate-900/50 p-4 shadow-2xl">
                             <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 relative group">
                                 <Image
-                                    src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=2000"
+                                    src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=1200"
                                     alt="Dashboard Preview"
                                     fill
+                                    priority
                                     className="object-cover w-full h-full transform transition-transform duration-700 group-hover:scale-105"
+                                    sizes="(max-width: 768px) 100vw, 50vw"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent pointer-events-none" />
                             </div>

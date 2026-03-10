@@ -1,4 +1,4 @@
-'use client';
+// Server component by default in Next.js 15
 
 import {
     Zap,

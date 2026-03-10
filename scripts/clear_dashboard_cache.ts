@@ -1,4 +1,5 @@
-import { invalidateDashboardCache, refreshDashboardSnapshot } from './src/lib/repository/dashboard';
+import { invalidateDashboardCache, refreshDashboardSnapshot } from '../src/lib/repository/dashboard';
+import { query } from '../src/lib/db';
 async function run() {
     try {
         console.log('Invalidating Redis cache...');

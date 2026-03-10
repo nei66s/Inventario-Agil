@@ -58,7 +58,7 @@ export function LandingHeader() {
                             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                         </Button>
                     ) : (
-                        <div className="h-9 w-9 rounded-full bg-slate-100/50 animate-pulse" />
+                        <div className="h-11 w-11 rounded-full bg-slate-100/50 animate-pulse" />
                     )}
                     <Button variant="outline" asChild className="hidden sm:inline-flex border-indigo-600/30 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30">
                         <Link href="/platform/tenants">Super Admin</Link>

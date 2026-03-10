@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useSiteBranding } from '@/hooks/use-site-branding';
 
 export function Logo({ className, hideText = false, size = 'md', isPlatform = false }: { className?: string; hideText?: boolean; size?: 'sm' | 'md' | 'lg', isPlatform?: boolean }) {
-  const { branding: fetchedBranding, loading: fetchedLoading, hasHydrated: fetchedHydrated } = useSiteBranding();
+  const { branding: fetchedBranding } = useSiteBranding();
 
   const platformBranding = {
     companyName: 'Black Tower X',
@@ -14,8 +14,6 @@ export function Logo({ className, hideText = false, size = 'md', isPlatform = fa
   };
 
   const branding = isPlatform ? platformBranding : fetchedBranding;
-  const hasHydrated = isPlatform ? true : fetchedHydrated;
-  const loading = isPlatform ? false : fetchedLoading;
 
   const iconSizes = {
     sm: 'h-8 w-8',
@@ -32,9 +30,7 @@ export function Logo({ className, hideText = false, size = 'md', isPlatform = fa
   return (
     <div className={cn(
       'flex items-center gap-3 text-primary transition-all duration-500 ease-in-out',
-      className,
-      (!hasHydrated) && 'opacity-0 scale-95',
-      (hasHydrated && loading) && 'opacity-70'
+      className
     )}>
       <div className={cn(
 
@@ -47,7 +43,6 @@ export function Logo({ className, hideText = false, size = 'md', isPlatform = fa
           fill
           sizes="64px"
           className="object-contain p-1"
-          unoptimized
         />
       </div>
       {!hideText && (

@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { CreditCard, CheckCircle2, ShieldCheck, Zap, ArrowRight, Loader2, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { useAuthUser } from '@/hooks/use-auth';
 
 export default function BillingPage() {

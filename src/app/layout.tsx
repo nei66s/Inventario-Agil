@@ -44,6 +44,11 @@ export const metadata: Metadata = {
     title: 'Inventário Ágil',
     description: 'Gestão logística inteligente e realtime.',
   },
+  icons: {
+    icon: '/black-tower-x-transp.png',
+    shortcut: '/black-tower-x-transp.png',
+    apple: '/black-tower-x-transp.png',
+  },
 };
 
 export default function RootLayout({
@@ -54,6 +59,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable} ${sourceCodePro.variable}`}>
       <head>
+        <link rel="preload" href="/black-tower-x-transp.png" as="image" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
