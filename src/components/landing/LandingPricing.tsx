@@ -99,7 +99,7 @@ export function LandingPricing() {
                                     <div className="text-right">
                                         <div className="flex items-baseline justify-end gap-1">
                                             <span className="text-xl font-bold text-slate-500 capitalize">R$</span>
-                                            <span className="text-6xl font-black tracking-tighter text-slate-900 dark:text-white">300</span>
+                                            <span className="text-6xl font-black tracking-tighter text-slate-900 dark:text-white">5</span>
                                         </div>
                                         <p className="text-slate-500 font-medium">por mês</p>
                                     </div>
@@ -118,7 +118,7 @@ export function LandingPricing() {
 
                                 <div className="mt-auto space-y-4">
                                     <Button size="lg" className="w-full h-16 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold shadow-xl shadow-indigo-500/20 transform transition-all active:scale-95" asChild>
-                                        <Link href="/register">
+                                        <Link href="https://www.asaas.com/c/9acmyekjvena8wub">
                                             Começar Agora <ArrowRight className="ml-2 h-6 w-6" />
                                         </Link>
                                     </Button>

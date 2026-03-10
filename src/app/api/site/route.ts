@@ -1,8 +1,8 @@
-"use server";
-
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { getSiteSettings, updateSiteSettings } from '@/lib/domain/site-settings';
+
+export const dynamic = 'force-dynamic';
 
 const FALLBACK_PLATFORM_LABEL = 'Inventário Ágil';
 const FALLBACK_SETTINGS = {
