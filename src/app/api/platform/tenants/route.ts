@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
         t.slug,
         t.status,
         t.plan,
+        t.subscription_status,
         t.is_platform_owner,
         t.blocked_reason,
         t.blocked_at,

@@ -489,8 +489,20 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     if (!mounted || authLoading) return;
     if (!authUser) {
       router.replace('/login');
+      return;
     }
-  }, [authLoading, authUser, mounted, router]);
+
+    // Billing Enforcement: Redirect to billing if status is INCOMPLETE
+    // Bypass for billing page itself, profile (user needs to logout/change password)
+    // and platform management pages.
+    const isBillingPage = pathname.startsWith('/dashboard/billing');
+    const isExcluded = pathname.startsWith('/profile') || pathname.startsWith('/platform');
+
+    if (authUser.subscriptionStatus === 'INCOMPLETE' && !isBillingPage && !isExcluded) {
+      router.replace('/dashboard/billing');
+    }
+  }, [authLoading, authUser, mounted, router, pathname]);
+
 
   const isInventoryActive = pathname.startsWith('/inventory');
 

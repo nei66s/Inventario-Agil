@@ -17,7 +17,8 @@ Este documento detalha as tarefas necessárias para transformar as promessas do 
   - [x] Lógica de aprovação manual via Painel Super Admin (Tenants iniciam como PENDING).
   - [x] Bloqueio automático de login para tenants BLOCKED ou PENDING.
   - [x] Dashboard de crescimento (Gráficos Recharts) no Painel Super Admin.
-  - [ ] Integração com gateway de pagamentos (Stripe/Asaas).
+  - [x] Integração com gateway de pagamentos (Asaas) via API e Webhooks.
+  - [x] Redirecionamento automático para checkout (Enforced Billing).
 
 - [x] **Onboarding Seed Data**
   - [x] Criação automática de UOMs (UN, KG, MT, PCT) para novos tenants.
@@ -72,5 +73,5 @@ Este documento detalha as tarefas necessárias para transformar as promessas do 
 ---
 
 ## 🛠️ Manutenção Institucional
-- [ ] **Páginas Jurídicas:** Revisar placeholder dos Termos de Uso por um advogado.
+- [x] **Páginas Jurídicas:** Termos de Uso e Política de Privacidade revisados e condizentes com o modelo SaaS/LGPD.
 - [ ] **Certificações:** Iniciar processo de auditoria para selos de segurança (ISO/SOC2).

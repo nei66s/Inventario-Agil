@@ -44,6 +44,7 @@ type Tenant = {
     created_at: string;
     user_count: string;
     last_user_created_at: string | null;
+    subscription_status?: string;
 };
 
 const STATUS_CONFIG = {
@@ -189,6 +190,16 @@ function TenantCard({
                                 {tenant.is_platform_owner && (
                                     <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-full">
                                         <Crown className="w-3 h-3" /> Plataforma
+                                    </span>
+                                )}
+                                {tenant.subscription_status && !tenant.is_platform_owner && (
+                                    <span className={cn(
+                                        "flex items-center gap-1 text-[10px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full border",
+                                        tenant.subscription_status === 'ACTIVE'
+                                            ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
+                                            : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800"
+                                    )}>
+                                        {tenant.subscription_status === 'ACTIVE' ? 'PAGO' : 'AGUARD. PAGTO'}
                                     </span>
                                 )}
                             </div>

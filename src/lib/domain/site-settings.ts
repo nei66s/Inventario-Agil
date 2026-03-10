@@ -1,4 +1,4 @@
-import { getPool } from '@/lib/db';
+import { query } from '@/lib/db';
 
 export type SiteSettings = {
   companyName: string;
@@ -52,8 +52,8 @@ function formatRow(row: {
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-  // Tenta buscar no Tenant Atual da Sessão
-  const result = await getPool().query(
+  // Tenta buscar no Tenant Atual da Sessão (O wrapper query aplica o RLS)
+  const result = await query(
     'SELECT company_name, document, phone, address, platform_label, logo_url, logo_data, logo_content_type, updated_at FROM site_settings WHERE id = $1',
     [PRIMARY_SITE_ID]
   );
@@ -130,7 +130,7 @@ export async function updateSiteSettings(update: SiteSettingsUpdate): Promise<Si
     return getSiteSettings();
   }
 
-  const result = await getPool().query(
+  const result = await query(
     `
       UPDATE site_settings
       SET ${assignments.join(', ')}
@@ -139,6 +139,7 @@ export async function updateSiteSettings(update: SiteSettingsUpdate): Promise<Si
     `,
     [...params, PRIMARY_SITE_ID]
   );
+
 
   if (result.rowCount === 0) {
     throw new Error('Site settings not found');
