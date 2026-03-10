@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/hooks/use-theme';
 
 export function LandingHeader() {
     const [isScrolled, setIsScrolled] = React.useState(false);
+    const { theme, toggleTheme, mounted } = useTheme();
 
     React.useEffect(() => {
         const handleScroll = () => {
@@ -44,6 +47,22 @@ export function LandingHeader() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-3">
+                    {mounted ? (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-full bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm shadow-sm"
+                            aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+                            onClick={toggleTheme}
+                        >
+                            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                        </Button>
+                    ) : (
+                        <div className="h-9 w-9 rounded-full bg-slate-100/50 animate-pulse" />
+                    )}
+                    <Button variant="outline" asChild className="hidden sm:inline-flex border-indigo-600/30 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30">
+                        <Link href="/platform/tenants">Super Admin</Link>
+                    </Button>
                     <Button variant="ghost" asChild className="hidden sm:inline-flex">
                         <Link href="/login">Entrar</Link>
                     </Button>

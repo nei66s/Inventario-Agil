@@ -71,6 +71,8 @@ import { useAuthUser } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
+import { useTheme } from '@/hooks/use-theme';
+
 
 const navItems = [
   { href: '/dashboard', icon: AreaChart, label: 'Indicadores' },
@@ -445,8 +447,7 @@ function AppSidebar() {
 function AppShellContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [mounted, setMounted] = React.useState(false);
-  const [theme, setTheme] = React.useState<'light' | 'dark'>('light');
+  const { theme, setTheme, mounted } = useTheme();
   const { user: authUser, loading: authLoading } = useAuthUser();
 
   const displayUser = authUser ?? null;
@@ -457,33 +458,6 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   const avatarSrc = headerIsHydrated ? displayUser?.avatarUrl ?? '/black-tower-x-transp.png' : '/black-tower-x-transp.png';
   const avatarAlt = headerIsHydrated ? displayUser?.name ?? 'Usuario' : 'Usuario';
   const avatarInitial = headerIsHydrated ? displayUser?.name?.charAt(0)?.toUpperCase() ?? 'U' : 'U';
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  React.useEffect(() => {
-    const saved = window.localStorage.getItem('theme');
-    const initialTheme =
-      saved === 'dark' || saved === 'light'
-        ? saved
-        : window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light';
-
-    setTheme(initialTheme);
-  }, []);
-
-  React.useEffect(() => {
-    const isDark = theme === 'dark';
-    document.documentElement.classList.toggle('dark', isDark);
-    window.localStorage.setItem('theme', theme);
-    try {
-      // Also persist theme in a cookie so SSR or other contexts can read it
-      // Max-Age ~ 1 year
-      document.cookie = `theme=${theme};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
-    } catch { }
-  }, [theme]);
 
   React.useEffect(() => {
     if (!mounted || authLoading) return;
@@ -518,6 +492,21 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
       router.replace('/login');
     }
   }, [router]);
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+          <p className="text-sm font-medium text-slate-500 animate-pulse">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return null;
+  }
 
   return (
     <div className="relative min-h-svh w-full bg-slate-50 dark:bg-slate-950 overflow-hidden">

@@ -1,5 +1,14 @@
 import React from 'react';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
-export default function PlatformLayout({ children }: { children: React.ReactNode }) {
+export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('sc-session')?.value;
+
+    if (!token) {
+        redirect('/login?redirect=/platform/tenants');
+    }
+
     return <>{children}</>;
 }

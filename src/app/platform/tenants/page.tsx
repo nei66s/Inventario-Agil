@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
     Building2,
     Users,
@@ -323,6 +324,7 @@ function TenantCard({
 }
 
 export default function PlatformTenantsPage() {
+    const router = useRouter();
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -369,9 +371,9 @@ export default function PlatformTenantsPage() {
     // Redirect if not logged in
     useEffect(() => {
         if (notLoggedIn) {
-            window.location.href = '/login?redirect=/platform/tenants';
+            router.replace('/login?redirect=/platform/tenants');
         }
-    }, [notLoggedIn]);
+    }, [notLoggedIn, router]);
 
 
     const handleStatusChange = async (tenantId: string, status: Tenant['status'], reason?: string) => {
@@ -413,7 +415,7 @@ export default function PlatformTenantsPage() {
         blocked: tenants.filter(t => t.status === 'BLOCKED').length,
     };
 
-    if (loading) {
+    if (loading || notLoggedIn) {
         return (
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center space-y-4">
