@@ -99,7 +99,7 @@ export function LandingPricing() {
                                     <div className="text-right">
                                         <div className="flex items-baseline justify-end gap-1">
                                             <span className="text-xl font-bold text-slate-500 capitalize">R$</span>
-                                            <span className="text-6xl font-black tracking-tighter text-slate-900 dark:text-white">300</span>
+                                            <span className="text-6xl font-black tracking-tighter text-slate-900 dark:text-white">5</span>
                                         </div>
                                         <p className="text-slate-500 font-medium">por mês</p>
                                     </div>

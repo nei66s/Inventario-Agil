@@ -1,8 +1,8 @@
-"use server";
-
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
 import { getSiteSettings, updateSiteSettings } from '@/lib/domain/site-settings';
+
+export const dynamic = 'force-dynamic';
 
 const FALLBACK_PLATFORM_LABEL = 'Inventário Ágil';
 const FALLBACK_SETTINGS = {
@@ -54,16 +54,12 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    if (!rawLogoData) {
-      return NextResponse.json(
-        { message: 'Faça upload do logo para salvar a identidade.' },
-        { status: 400 }
-      );
-    }
-
-    const parsedLogo = parseDataUrl(rawLogoData);
-    if (!parsedLogo) {
-      return NextResponse.json({ message: 'Formato de imagem invalido' }, { status: 400 });
+    let parsedLogo = null;
+    if (rawLogoData) {
+      parsedLogo = parseDataUrl(rawLogoData);
+      if (!parsedLogo) {
+        return NextResponse.json({ message: 'Formato de imagem invalido' }, { status: 400 });
+      }
     }
 
     const updated = await updateSiteSettings({
@@ -72,9 +68,9 @@ export async function PATCH(request: NextRequest) {
       phone,
       address,
       platformLabel: FALLBACK_PLATFORM_LABEL,
-      logoData: parsedLogo.buffer,
-      logoContentType: parsedLogo.contentType,
-      logoUrl: null,
+      logoData: parsedLogo ? parsedLogo.buffer : undefined,
+      logoContentType: parsedLogo ? parsedLogo.contentType : undefined,
+      logoUrl: parsedLogo ? null : undefined, // Only reset URL if new data provided
     });
 
     return NextResponse.json({

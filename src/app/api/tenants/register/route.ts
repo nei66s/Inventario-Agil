@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getPool } from '@/lib/db';
+import { stripeClient } from '@/lib/billing/stripe';
 
 /**
  * API PÚBLICA DE AUTOCADASTRO (MECANISMO DE NOVOS CLIENTES)
@@ -20,14 +21,36 @@ export async function POST(req: NextRequest) {
 
         await client.query('BEGIN');
 
-        // 1. Criar Tenant (Inicia como PENDING para aprovação manual do Super Admin)
+        // 1. Criar Tenant (Inicia como PENDING)
         const tenantRes = await client.query(
             "INSERT INTO tenants (name, slug, status) VALUES ($1, $2, 'PENDING') RETURNING id",
             [tenantName, slug]
         );
         const tenantId = tenantRes.rows[0].id;
 
-        // 2. Criar Configurações de Site do Tenant (RLS protege a escrita)
+        // 2. Criar Checkout no Stripe
+        let stripeCustomerId = null;
+        let checkoutUrl = null;
+
+        try {
+            // Criar cliente no Stripe
+            const stripeCustomer = await stripeClient.createCustomer(adminEmail, tenantName);
+            stripeCustomerId = stripeCustomer.id;
+
+            // Criar Sessão de Checkout
+            const session = await stripeClient.createCheckoutSession(stripeCustomerId, tenantId);
+            checkoutUrl = session.url;
+
+            // Atualizar o tenant com o ID do Stripe
+            await client.query(
+                "UPDATE tenants SET stripe_customer_id = $1 WHERE id = $2",
+                [stripeCustomerId, tenantId]
+            );
+        } catch (stripeErr) {
+            console.error('Stripe Integration Error', stripeErr);
+        }
+
+        // 3. Criar Configurações de Site do Tenant
         await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(tenantId)}`);
 
         await client.query(
@@ -66,7 +89,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
             message: 'Empresa cadastrada com sucesso!',
             tenantId,
-            slug
+            slug,
+            checkoutUrl
         });
     } catch (err: any) {
         await client.query('ROLLBACK');

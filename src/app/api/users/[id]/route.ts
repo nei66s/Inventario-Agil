@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getPool } from '@/lib/db';
+import { getPool, query } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { Role } from '@/lib/domain/types';
 
@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (typeof body.email === 'string') {
       const next = body.email.trim().toLowerCase();
       if (next) {
-        const conflict = await getPool().query('SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2', [
+        const conflict = await query('SELECT id FROM users WHERE LOWER(email) = $1 AND id <> $2', [
           next,
           targetId,
         ]);
@@ -72,9 +72,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     values.push(targetId);
-    await getPool().query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length}`, values);
+    await query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length}`, values);
 
-    const updated = await getPool().query('SELECT id, name, email, role, avatar_url, is_blocked FROM users WHERE id = $1', [targetId]);
+    const updated = await query('SELECT id, name, email, role, avatar_url, is_blocked FROM users WHERE id = $1', [targetId]);
     if (updated.rowCount === 0) {
       return NextResponse.json({ message: 'Usuario nao encontrado' }, { status: 404 });
     }
@@ -110,7 +110,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ message: 'Nao pode excluir o seu proprio usuario' }, { status: 400 });
     }
 
-    await getPool().query('DELETE FROM users WHERE id = $1', [targetId]);
+    await query('DELETE FROM users WHERE id = $1', [targetId]);
 
     return NextResponse.json({ message: 'Usuario excluido com sucesso' });
   } catch (err) {

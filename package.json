@@ -21,7 +21,10 @@
     "typecheck": "tsc --noEmit",
     "clear-db": "node ./scripts/clear-db.js",
     "db:migrate": "node ./scripts/run-migrations.js",
-    "audit:dashboard": "node scripts/run-speed-insights-dashboard.js"
+    "audit:dashboard": "node scripts/run-speed-insights-dashboard.js",
+    "monitor:check": "npx tsx scripts/watchdog.ts",
+    "monitor:report": "npx tsx scripts/watchdog.ts --report",
+    "monitor:service": "npx tsx scripts/monitor-service.ts"
   },
   "dependencies": {
     "@flags-sdk/vercel": "^1.0.1",
@@ -76,6 +79,7 @@
     "react-dom": "^19.2.1",
     "react-hook-form": "^7.54.2",
     "recharts": "^2.15.1",
+    "stripe": "^20.4.1",
     "swr": "^2.4.0",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",

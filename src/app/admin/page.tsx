@@ -138,14 +138,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (!logoDataUrl) {
-      toast({
-        title: 'Logo necessário',
-        description: 'Faça upload do logo para salvar a identidade.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    // Logo is optional now
 
     setSavingSettings(true);
     const payload: Record<string, unknown> = {
@@ -416,67 +409,82 @@ export default function AdminPage() {
                 placeholder="Rua, Número - Bairro, Cidade - Estado, CEP"
               />
             </div>
-            <div className="grid gap-2 md:col-span-2">
-              <Label htmlFor="site-logo-file">Upload do logo</Label>
-              <input
-                ref={fileInputRef}
-                id="site-logo-file"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={handleLogoFileChange}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Selecionar arquivo
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {logoFileName ?? 'Nenhum arquivo selecionado'}
-                </span>
+            <div className="grid gap-4 md:col-span-2 border-t pt-4 mt-2">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+
+                <div className="flex-1 space-y-3">
+                  <Label htmlFor="site-logo-file">Logotipo da Empresa</Label>
+                  <p className="text-[13px] text-muted-foreground pb-1">Recomendamos o uso de fundo transparente (PNG/WEBP).</p>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      ref={fileInputRef}
+                      id="site-logo-file"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={handleLogoFileChange}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      type="button"
+                      className="bg-muted/30"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Selecionar arquivo
+                    </Button>
+                    <span className="text-[13px] text-muted-foreground truncate max-w-[180px] sm:max-w-xs font-medium">
+                      {logoFileName ?? 'Nenhum arquivo enviado'}
+                    </span>
+                    {(logoDataUrl || logoFileName) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        type="button"
+                        className="text-red-500 hover:text-red-600 hover:bg-red-500/10 h-8 w-8 px-0 ml-auto sm:ml-0"
+                        title="Limpar logo"
+                        onClick={() => {
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                          setLogoDataUrl(null);
+                          setLogoFileName(null);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="w-full md:w-72 rounded-xl border border-border/70 bg-muted/20 p-4 shrink-0 shadow-sm">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-3">Pré-visualização</p>
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-11 w-11 shrink-0 rounded-md bg-white border border-border/50 p-1.5 shadow-sm dark:bg-slate-900/50">
+                      <Image
+                        src={previewLogo}
+                        alt="Preview"
+                        fill
+                        sizes="44px"
+                        className="object-contain"
+                        unoptimized
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] font-bold text-foreground truncate">{companyName || 'Nome da Empresa'}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-0.5">Inventário Ágil</p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => {
-                  if (fileInputRef.current) fileInputRef.current.value = '';
-                  setLogoDataUrl(null);
-                  setLogoFileName(null);
-                }}
-              >
-                Limpar logo
-              </Button>
             </div>
-            <div className="md:col-span-2">
-              <Button className="w-full sm:w-auto" type="submit" disabled={savingSettings}>
-                {savingSettings ? 'Salvando identidade...' : 'Salvar identidade'}
+
+            <div className="md:col-span-2 pt-4 border-t mt-1 flex justify-end">
+              <Button className="w-full sm:w-auto px-8" type="submit" disabled={savingSettings}>
+                {savingSettings ? 'Salvando...' : 'Salvar identidade'}
               </Button>
             </div>
           </form>
-          <div className="rounded-2xl border border-border/70 bg-muted p-4">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pré-visualização</p>
-            <div className="mt-3 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <div className="relative h-12 w-12 rounded-lg border border-border/70 bg-card/50 p-2">
-                <Image
-                  src={previewLogo}
-                  alt="Preview do logo"
-                  fill
-                  sizes="48px"
-                  className="object-contain"
-                  unoptimized
-                />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">{companyName}</p>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Inventário Ágil</p>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
       <Card>
