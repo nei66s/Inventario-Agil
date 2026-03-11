@@ -18,10 +18,9 @@ export default function BillingPage() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.message || 'Falha ao iniciar assinatura');
 
-            // Redirect to Asaas Invoice or show Pix QR Code
-            // For now, we'll just refresh or tell the user it was created
-            if (data.invoiceUrl) {
-                window.location.href = data.invoiceUrl;
+            // Redirect to Stripe Checkout
+            if (data.checkoutUrl) {
+                window.location.href = data.checkoutUrl;
             } else {
                 await refresh();
             }
