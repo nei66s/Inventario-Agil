@@ -138,14 +138,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (!logoDataUrl) {
-      toast({
-        title: 'Logo necessário',
-        description: 'Faça upload do logo para salvar a identidade.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    // Logo is optional now
 
     setSavingSettings(true);
     const payload: Record<string, unknown> = {

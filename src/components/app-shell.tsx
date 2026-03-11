@@ -154,6 +154,7 @@ function AppSidebar() {
     } catch (error) {
       console.error('logout failed', error);
     } finally {
+      localStorage.clear();
       router.replace('/login');
     }
   }, [router]);
@@ -489,6 +490,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('logout failed', error);
     } finally {
+      localStorage.clear();
       router.replace('/login');
     }
   }, [router]);
