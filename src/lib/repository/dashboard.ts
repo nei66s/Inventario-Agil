@@ -203,9 +203,7 @@ const MATERIALIZED_VIEWS = [
 ]
 let bypassRedisCache = false
 
-async function loadOrders(): Promise<LoadResult<{ items: Order[] }>> {
-  const tenantId = await getTenantFromSession()
-  if (!tenantId) throw new Error('Missing tenant context for dashboard query')
+async function loadOrders(tenantId: string): Promise<LoadResult<{ items: Order[] }>> {
 
   const res = await query<OrderRow>(`
     SELECT *
@@ -292,9 +290,7 @@ async function loadOrders(): Promise<LoadResult<{ items: Order[] }>> {
   return { items: orders, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadProductionTasks(): Promise<LoadResult<{ items: ProductionTask[] }>> {
-  const tenantId = await getTenantFromSession()
-  if (!tenantId) throw new Error('Missing tenant context for production tasks query')
+async function loadProductionTasks(tenantId: string): Promise<LoadResult<{ items: ProductionTask[] }>> {
 
   const res = await query<ProductionTaskRow>(
     `SELECT *
@@ -322,11 +318,9 @@ async function loadProductionTasks(): Promise<LoadResult<{ items: ProductionTask
   return { items, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadMaterialsWithStock(): Promise<
+async function loadMaterialsWithStock(tenantId: string): Promise<
   LoadResult<{ materials: Material[]; stockBalances: StockBalance[] }>
 > {
-  const tenantId = await getTenantFromSession()
-  if (!tenantId) throw new Error('Missing tenant context for materials query')
 
   const res = await query<MaterialStockRow>(`
     SELECT *
@@ -395,7 +389,7 @@ async function loadUsers(): Promise<LoadResult<{ items: User[] }>> {
   return { items: users, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadStockReservations(): Promise<LoadResult<{ items: StockReservation[] }>> {
+async function loadStockReservations(tenantId: string): Promise<LoadResult<{ items: StockReservation[] }>> {
   const res = await query<StockReservationRow>(`
     SELECT
       sr.id,
@@ -410,9 +404,9 @@ async function loadStockReservations(): Promise<LoadResult<{ items: StockReserva
     FROM stock_reservations sr
     LEFT JOIN users u ON u.id = sr.user_id
     WHERE sr.expires_at > now()
-      AND sr.tenant_id = current_setting('app.current_tenant_id')::uuid
+      AND sr.tenant_id = $1::uuid
     ORDER BY sr.expires_at ASC
-  `)
+  `, [tenantId])
 
   const items = res.rows.map((row) => ({
     id: `SR-${row.id}`,
@@ -433,13 +427,13 @@ async function loadStockReservations(): Promise<LoadResult<{ items: StockReserva
   return { items, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadInventoryReceipts(): Promise<LoadResult<{ items: InventoryReceipt[] }>> {
+async function loadInventoryReceipts(tenantId: string): Promise<LoadResult<{ items: InventoryReceipt[] }>> {
   const res = await query<InventoryReceiptSnapshotRow>(`
     SELECT *
     FROM mv_inventory_receipts_snapshot
-    WHERE tenant_id = current_setting('app.current_tenant_id')::uuid
+    WHERE tenant_id = $1::uuid
     ORDER BY created_at DESC
-  `)
+  `, [tenantId])
 
   const receipts = res.rows.map((row) => {
     const parsedItems = parseJson<InventoryReceiptItemSnapshot[]>(row.items, [])
@@ -470,13 +464,13 @@ async function loadInventoryReceipts(): Promise<LoadResult<{ items: InventoryRec
   return { items: receipts, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function loadNotifications(): Promise<LoadResult<{ items: Notification[] }>> {
+async function loadNotifications(tenantId: string): Promise<LoadResult<{ items: Notification[] }>> {
   const res = await query<NotificationRow>(`
     SELECT id, type, title, message, created_at, read_at, role_target, order_id, material_id, dedupe_key
     FROM notifications
-    WHERE tenant_id = current_setting('app.current_tenant_id')::uuid
+    WHERE tenant_id = $1::uuid
     ORDER BY created_at DESC
-  `)
+  `, [tenantId])
   const items = res.rows.map((row) => ({
     id: `N-${row.id}`,
     type: row.type,
@@ -496,16 +490,16 @@ async function loadNotifications(): Promise<LoadResult<{ items: Notification[] }
   return { items, queryMs: res.queryTimeMs, queryProfile }
 }
 
-async function createDashboardSnapshotInternal(): Promise<DashboardData> {
+async function createDashboardSnapshotInternal(tenantId: string): Promise<DashboardData> {
   const totalStart = process.hrtime.bigint()
   const [ordersResult, tasksResult, materialsResult, usersResult, reservationsResult, receiptsResult, notificationsResult] = await Promise.all([
-    loadOrders(),
-    loadProductionTasks(),
-    loadMaterialsWithStock(),
+    loadOrders(tenantId),
+    loadProductionTasks(tenantId),
+    loadMaterialsWithStock(tenantId),
     loadUsers(),
-    loadStockReservations(),
-    loadInventoryReceipts(),
-    loadNotifications(),
+    loadStockReservations(tenantId),
+    loadInventoryReceipts(tenantId),
+    loadNotifications(tenantId),
   ])
 
   const segmentResults = [
@@ -561,10 +555,7 @@ function logDashboardSnapshotQueryProfile(queryProfiles: QueryProfileEntry[], to
 }
 
 // Keep dashboard data fresh-ish (~15s) while reusing the cached snapshot and Redis fallback.
-async function loadDashboardSnapshot(): Promise<DashboardData | null> {
-  const tenantId = await getTenantFromSession()
-  if (!tenantId) return null
-
+async function loadDashboardSnapshot(tenantId: string): Promise<DashboardData> {
   const tenantCacheKey = `${DASHBOARD_CACHE_KEY}:${tenantId}`
 
   const skipCache = bypassRedisCache
@@ -573,7 +564,7 @@ async function loadDashboardSnapshot(): Promise<DashboardData | null> {
     const cached = await getJsonCache<DashboardData>(tenantCacheKey)
     if (cached) return cached
   }
-  const snapshot = await createDashboardSnapshotInternal()
+  const snapshot = await createDashboardSnapshotInternal(tenantId)
   await setJsonCache(tenantCacheKey, snapshot)
   return snapshot
 }
@@ -585,9 +576,7 @@ export async function getDashboardSnapshot() {
 
   return unstable_cache(
     async () => {
-      const data = await loadDashboardSnapshot();
-      if (!data) throw new Error('No dashboard data');
-      return data;
+      return loadDashboardSnapshot(tenantId);
     },
     [`dashboard-${tenantId}`], // Per-tenant key
     { tags: ['dashboard', `dashboard-${tenantId}`], revalidate: 15 }
