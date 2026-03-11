@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getPool } from '@/lib/db';
-import { asaas } from '@/lib/billing/asaas';
+import { stripeClient } from '@/lib/billing/stripe';
 
 /**
  * API PÚBLICA DE AUTOCADASTRO (MECANISMO DE NOVOS CLIENTES)
@@ -28,37 +28,26 @@ export async function POST(req: NextRequest) {
         );
         const tenantId = tenantRes.rows[0].id;
 
-        // 2. Criar Cliente no Asaas para este Tenant
-        let asaasCustomerId = null;
+        // 2. Criar Checkout no Stripe
+        let stripeCustomerId = null;
         let checkoutUrl = null;
 
         try {
-            const asaasCustomer = await asaas.createCustomer({
-                name: tenantName,
-                email: adminEmail,
-            });
-            asaasCustomerId = asaasCustomer.id;
+            // Criar cliente no Stripe
+            const stripeCustomer = await stripeClient.createCustomer(adminEmail, tenantName);
+            stripeCustomerId = stripeCustomer.id;
 
-            // Criar uma cobrança de R$ 5.00 via PIX/BOLETO/CARTÃO (UNDEFINED permite ao cliente escolher)
-            const payment = await asaas.createCombinedPayment({
-                customer: asaasCustomerId,
-                billingType: 'UNDEFINED',
-                value: 5.00,
-                nextDueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // Amanhã
-                description: `Ativação de Instância - ${tenantName}`,
-                externalReference: tenantId, // Crucial para o Webhook saber quem pagou!
-            });
+            // Criar Sessão de Checkout
+            const session = await stripeClient.createCheckoutSession(stripeCustomerId, tenantId);
+            checkoutUrl = session.url;
 
-            checkoutUrl = payment.invoiceUrl || payment.bankSlipUrl;
-
-            // Atualizar o tenant com o ID do Asaas
+            // Atualizar o tenant com o ID do Stripe
             await client.query(
-                "UPDATE tenants SET asaas_customer_id = $1 WHERE id = $2",
-                [asaasCustomerId, tenantId]
+                "UPDATE tenants SET stripe_customer_id = $1 WHERE id = $2",
+                [stripeCustomerId, tenantId]
             );
-        } catch (asaasErr) {
-            console.error('Asaas Integration Error', asaasErr);
-            // Prossegue mesmo se o Asaas falhar, mas loga o erro
+        } catch (stripeErr) {
+            console.error('Stripe Integration Error', stripeErr);
         }
 
         // 3. Criar Configurações de Site do Tenant
