@@ -55,6 +55,9 @@ export function useSiteBranding() {
       // Persist to local storage for instant client-side retrieval
       localStorage.setItem(CACHE_KEY, JSON.stringify(newBranding));
 
+      // Notify other hook instances in the same window
+      window.dispatchEvent(new Event('site-branding-updated'));
+
       // Persist to cookies for potential SSR support (matching theme pattern)
       try {
         const cookieValue = btoa(JSON.stringify(newBranding));
@@ -85,7 +88,16 @@ export function useSiteBranding() {
     // 2. Refresh from API
     fetchBranding(active);
 
-    // 3. Listen for storage changes
+    const updateFromCache = () => {
+      const currentCache = localStorage.getItem(CACHE_KEY);
+      if (currentCache) {
+        try {
+          setBranding(JSON.parse(currentCache));
+        } catch { }
+      }
+    };
+
+    // 3. Listen for storage changes (cross-tab)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === CACHE_KEY && e.newValue) {
         try {
@@ -93,11 +105,15 @@ export function useSiteBranding() {
         } catch { }
       }
     };
+
+    // 4. Listen for custom event (same-tab)
+    window.addEventListener('site-branding-updated', updateFromCache);
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
       active = false;
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('site-branding-updated', updateFromCache);
     };
   }, [fetchBranding]);
 
