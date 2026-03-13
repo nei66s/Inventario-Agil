@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { getPool, query } from '@/lib/db';
+import { query } from '@/lib/db';
 import { isUnauthorizedError, requireAdmin } from '@/lib/auth';
 import { Role } from '@/lib/domain/types';
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { getPool, query } from '@/lib/db';
+import { query } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { Role } from '@/lib/domain/types';
 

@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers';
+
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { RealtimeListener } from "@/components/RealtimeListener";
