@@ -46,6 +46,46 @@ const defaultConditionCategories = ['Fibra', 'FibraCor', 'Corda', 'CordaCor', 'T
 const isMrpOrder = (order: Order) =>
   Boolean(order.isMrp ?? String(order.orderNumber ?? '').startsWith('MRP-'));
 
+function EditableInput({
+  value,
+  onSave,
+  onChangeClient,
+  ...props
+}: React.ComponentProps<typeof Input> & {
+  value: string;
+  onSave: (val: string) => void;
+  onChangeClient?: (val: string) => void;
+}) {
+  const [localValue, setLocalValue] = React.useState(value);
+  const [isFocused, setIsFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value);
+    }
+  }, [value, isFocused]);
+
+  return (
+    <Input
+      {...props}
+      value={localValue}
+      onFocus={(e) => {
+        setIsFocused(true);
+        props.onFocus?.(e);
+      }}
+      onChange={(e) => {
+        setLocalValue(e.target.value);
+        onChangeClient?.(e.target.value);
+      }}
+      onBlur={(e) => {
+        setIsFocused(false);
+        onSave(e.target.value);
+        props.onBlur?.(e);
+      }}
+    />
+  );
+}
+
 export default function OrdersPage() {
   const [db, setDb] = React.useState<{
     orders: Order[];
@@ -447,6 +487,7 @@ export default function OrdersPage() {
   }, [filteredOrders]);
 
   const selectedOrder = db.orders.find((item) => item.id === selectedOrderId) ?? null;
+  const isFinalized = selectedOrder ? (selectedOrder.status === 'FINALIZADO' || selectedOrder.status === 'SAIDA_CONCLUIDA') : false;
   const selectedOrderIsMrp = selectedOrder ? isMrpOrder(selectedOrder) : false;
 
   React.useEffect(() => {
@@ -604,10 +645,10 @@ export default function OrdersPage() {
                     </span>
                   </CardTitle>
                   <CardDescription>
-                    Status {selectedOrder.status} - Pronto {readinessLabel(selectedOrder.readiness)}
+                    Status {selectedOrder.status} - {readinessLabel(selectedOrder.readiness)}
                   </CardDescription>
                 </div>
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                   <Button className="w-full sm:w-auto" variant="outline" onClick={async () => {
                     try {
                       await deleteOrder(selectedOrder.id);
@@ -616,10 +657,11 @@ export default function OrdersPage() {
                       console.error(err);
                       alert('Erro ao remover pedido');
                     }
-                  }}>
+                  }}
+                    disabled={isFinalized}
+                  >
                     <Trash2 className="mr-2 h-4 w-4" />Excluir
                   </Button>
-                  {/* Save button removed: unused/empty button caused an empty element in the DOM */}
                 </div>
               </div>
             </CardHeader>
@@ -639,21 +681,21 @@ export default function OrdersPage() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <Label>Cliente <span className="text-destructive">*</span></Label>
-                  <Input
+                  <EditableInput
                     id="order-client-name"
-                    value={selectedOrder.clientName}
-                    onChange={(e) => updateOrderClientName(selectedOrder.id, e.target.value)}
-                    onBlur={(e) => persistOrderClientName(selectedOrder.id, e.target.value)}
+                    value={selectedOrder.clientName ?? ''}
+                    onChangeClient={(val) => updateOrderClientName(selectedOrder.id, val)}
+                    onSave={(val) => persistOrderClientName(selectedOrder.id, val)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        // Focus the first item qty if it exists
                         if (selectedOrder.items.length > 0) {
                           document.getElementById(`qty-${selectedOrder.items[0].id}`)?.focus();
                         }
                       }
                     }}
                     placeholder="Nome do cliente"
+                    disabled={isFinalized}
                   />
                 </div>
                 <div>
@@ -662,6 +704,7 @@ export default function OrdersPage() {
                     type="date"
                     className="w-[140px]"
                     value={selectedOrder.dueDate.slice(0, 10)}
+                    disabled={isFinalized}
                     onChange={(e) => {
                       const val = `${e.target.value}T12:00:00.000Z`;
                       setDb((prev) => ({
@@ -681,6 +724,7 @@ export default function OrdersPage() {
                     min={1}
                     className="w-[80px]"
                     value={selectedOrder.volumeCount}
+                    disabled={isFinalized}
                     onChange={(e) => {
                       const val = Number(e.target.value);
                       setDb((prev) => ({
@@ -697,7 +741,10 @@ export default function OrdersPage() {
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Select onValueChange={(value) => addItem(selectedOrder.id, value)}>
+                <Select
+                  onValueChange={(value) => addItem(selectedOrder.id, value)}
+                  disabled={isFinalized}
+                >
                   <SelectTrigger className="w-full sm:max-w-sm">
                     <SelectValue placeholder="Adicionar material" />
                   </SelectTrigger>
@@ -709,7 +756,14 @@ export default function OrdersPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button className="w-full sm:w-auto" variant="outline" onClick={() => heartbeatOrder(selectedOrder.id)}>Estender reserva por +5 min</Button>
+                <Button
+                  className="w-full sm:w-auto"
+                  variant="outline"
+                  onClick={() => heartbeatOrder(selectedOrder.id)}
+                  disabled={isFinalized}
+                >
+                  Estender reserva por +5 min
+                </Button>
               </div>
 
               <div className="max-h-[360px] overflow-auto">
@@ -756,18 +810,17 @@ export default function OrdersPage() {
                               </TableCell>
                               {/* `Cor` column removed; prefer item.conditions for color */}
                               <TableCell className="text-right">
-                                <Input
+                                <EditableInput
                                   id={`qty-${item.id}`}
                                   type="number"
-                                  value={item.qtyRequested}
-                                  onChange={(e) => {
-                                    const raw = e.target.value;
-                                    const qty = raw === '' ? 0 : Number(raw);
+                                  value={String(item.qtyRequested ?? '')}
+                                  onChangeClient={(val) => {
+                                    const qty = val === '' ? 0 : Number(val);
                                     updateOrderItemField(selectedOrder.id, item.id, {
                                       qtyRequested: Number.isFinite(qty) ? qty : 0,
                                     });
                                   }}
-                                  onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value || 0))}
+                                  onSave={(val) => onQtyBlurReserve(selectedOrder.id, item.id, Number(val || 0))}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.preventDefault();
@@ -775,11 +828,13 @@ export default function OrdersPage() {
                                     }
                                   }}
                                   className="ml-auto w-full max-w-[7rem] text-right"
+                                  disabled={isFinalized}
                                 />
                               </TableCell>
                               <TableCell>
                                 <Select
                                   value={item.shortageAction ?? 'PRODUCE'}
+                                  disabled={isFinalized}
                                   onValueChange={(value) => {
                                     const action = value as 'PRODUCE' | 'BUY';
                                     updateOrderItemField(selectedOrder.id, item.id, { shortageAction: action });
@@ -802,12 +857,12 @@ export default function OrdersPage() {
                                 {item.qtyToProduce}
                               </TableCell>
                               <TableCell>
-                                <Input
+                                <EditableInput
                                   id={`color-${item.id}`}
                                   placeholder="Cor"
                                   value={item.color ?? ''}
-                                  onChange={(e) => updateOrderItemField(selectedOrder.id, item.id, { color: e.target.value })}
-                                  onBlur={(e) => persistOrderItemField(selectedOrder.id, item.id, { color: String(e.target.value ?? '') })}
+                                  onChangeClient={(val) => updateOrderItemField(selectedOrder.id, item.id, { color: val })}
+                                  onSave={(val) => persistOrderItemField(selectedOrder.id, item.id, { color: String(val ?? '') })}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.preventDefault();
@@ -823,10 +878,15 @@ export default function OrdersPage() {
                                     }
                                   }}
                                   className="w-full max-w-[7rem]"
+                                  disabled={isFinalized}
                                 />
                               </TableCell>
                               <TableCell className="text-center">
-                                <Button variant="ghost" onClick={() => removeOrderItem(selectedOrder.id, item.id)}>
+                                <Button
+                                  variant="ghost"
+                                  onClick={() => removeOrderItem(selectedOrder.id, item.id)}
+                                  disabled={isFinalized}
+                                >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </TableCell>
@@ -839,11 +899,11 @@ export default function OrdersPage() {
                                     {item.conditions && item.conditions.length > 0 ? (
                                       item.conditions.map((cond, idx) => (
                                         <div key={idx} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                                          <Input
+                                          <EditableInput
                                             placeholder="Campo (ex: Cor)"
                                             value={cond.key}
-                                            onChange={(e) => {
-                                              const nextVal = e.target.value;
+                                            onChangeClient={(val) => {
+                                              const nextVal = val;
                                               setDb((prev) => ({
                                                 ...prev,
                                                 orders: prev.orders.map((o) => {
@@ -862,14 +922,15 @@ export default function OrdersPage() {
                                                 }),
                                               }));
                                             }}
-                                            onBlur={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: e.target.value })}
+                                            onSave={(val) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: val })}
                                             className="h-8"
+                                            disabled={isFinalized}
                                           />
-                                          <Input
+                                          <EditableInput
                                             placeholder="Valor (ex: Vermelho)"
                                             value={cond.value}
-                                            onChange={(e) => {
-                                              const nextVal = e.target.value;
+                                            onChangeClient={(val) => {
+                                              const nextVal = val;
                                               setDb((prev) => ({
                                                 ...prev,
                                                 orders: prev.orders.map((o) => {
@@ -888,9 +949,14 @@ export default function OrdersPage() {
                                                 }),
                                               }));
                                             }}
-                                            onBlur={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: e.target.value })}
+                                            onSave={(val) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: val })}
+                                            disabled={isFinalized}
                                           />
-                                          <Button variant="ghost" onClick={() => removeItemCondition(selectedOrder.id, item.id, idx)}>
+                                          <Button
+                                            variant="ghost"
+                                            onClick={() => removeItemCondition(selectedOrder.id, item.id, idx)}
+                                            disabled={isFinalized}
+                                          >
                                             <Trash2 className="h-4 w-4" />
                                           </Button>
                                         </div>
@@ -898,28 +964,30 @@ export default function OrdersPage() {
                                     ) : (
                                       <p className="text-muted-foreground">Sem condicoes adicionadas.</p>
                                     )}
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        className="w-full sm:w-auto"
-                                        onClick={() =>
-                                          setConditionPickerTarget({ orderId: selectedOrder.id, itemId: item.id })
-                                        }
-                                      >
-                                        <PlusCircle className="mr-2 h-4 w-4" />
-                                        Adicionar condição
-                                      </Button>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full sm:w-auto"
-                                        onClick={() => addItemCondition(selectedOrder.id, item.id)}
-                                      >
-                                        Condição livre
-                                      </Button>
-                                    </div>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          className="w-full sm:w-auto"
+                                          onClick={() =>
+                                            setConditionPickerTarget({ orderId: selectedOrder.id, itemId: item.id })
+                                          }
+                                          disabled={isFinalized}
+                                        >
+                                          <PlusCircle className="mr-2 h-4 w-4" />
+                                          Adicionar condição
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="w-full sm:w-auto"
+                                          onClick={() => addItemCondition(selectedOrder.id, item.id)}
+                                          disabled={isFinalized}
+                                        >
+                                          Condição livre
+                                        </Button>
+                                      </div>
                                     {isPickerOpen && (
                                       <div className="mt-2 rounded-xl border border-border/70 bg-background p-3 text-sm shadow-inner">
                                         <div className="mb-2 flex items-center justify-between">
@@ -1056,6 +1124,6 @@ export default function OrdersPage() {
           </>
         )}
       </Card>
-    </div >
+    </div>
   );
 }

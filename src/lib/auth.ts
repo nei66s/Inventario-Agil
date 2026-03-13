@@ -81,7 +81,7 @@ export function clearAuthCookie() {
 
 export async function requireAuth(req: NextRequest): Promise<{ userId: string, role: string, tenantId: string }> {
   const payload = getAuthPayload(req);
-  if (!payload) {
+  if (!payload || !payload.tenantId) {
     throw new UnauthorizedError();
   }
   return payload;
