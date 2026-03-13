@@ -32,6 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       await postReceipt(client, receiptId, {
         postedBy: auth.userId,
         autoAllocate,
+        tenantId: auth.tenantId,
       })
       await client.query('COMMIT')
     } catch (err) {

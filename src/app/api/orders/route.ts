@@ -143,7 +143,7 @@ function errorMessage(err: unknown): string {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth(request)
+    const auth = await requireAuth(request)
     const totalStart = process.hrtime.bigint()
     const res = await query<OrderRow>(
       `SELECT
@@ -185,7 +185,9 @@ export async function GET(request: NextRequest) {
        LEFT JOIN LATERAL (
          SELECT EXISTS(SELECT 1 FROM production_tasks pt WHERE pt.order_id = o.id AND pt.status <> 'DONE') AS has_pending_production
        ) pp ON true
-       ORDER BY o.created_at ASC`
+       WHERE o.tenant_id = $1::uuid
+       ORDER BY o.created_at ASC`,
+      [auth.tenantId]
     )
     const rows = res.rows || []
     const queryMs = res.queryTimeMs
@@ -266,9 +268,9 @@ export async function GET(request: NextRequest) {
       const auditRes = await query(
         `SELECT id, order_id, action, actor, timestamp, details
          FROM audit_events
-         WHERE order_id = ANY($1::int[])
+         WHERE order_id = ANY($1::int[]) AND tenant_id = $2::uuid
          ORDER BY timestamp DESC`,
-        [ids]
+        [ids, auth.tenantId]
       )
       const auditMap = new Map<number, any[]>()
       for (const row of auditRes.rows as any[]) {

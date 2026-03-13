@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Categoria invalida' }, { status: 400 })
     }
 
-    const exists = await query('SELECT id FROM precondition_categories WHERE id = $1', [categoryId])
+    const exists = await query('SELECT id FROM precondition_categories WHERE id = $1 AND tenant_id = $2', [categoryId, auth.tenantId])
     if (exists.rowCount === 0) {
       return NextResponse.json({ error: 'Categoria nao encontrada' }, { status: 404 })
     }
@@ -37,8 +37,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const existing = await query(
-      'SELECT id, value FROM precondition_values WHERE category_id = $1 AND value = $2',
-      [categoryId, value]
+      'SELECT id, value FROM precondition_values WHERE category_id = $1 AND value = $2 AND tenant_id = $3',
+      [categoryId, value, auth.tenantId]
     )
 
     if (existing.rowCount > 0) {

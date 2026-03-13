@@ -66,6 +66,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return NextResponse.json({ error: 'action inválida' }, { status: 400 })
     }
 
+    if (!auth.tenantId) return NextResponse.json({ error: 'Tenant context missing' }, { status: 403 })
+
     if (action === 'update_produced') {
       const producedQty = payload.producedQty !== undefined ? Number(payload.producedQty) : null
       const producedWeight = payload.producedWeight !== undefined ? Number(payload.producedWeight) : null
@@ -202,6 +204,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
             postedBy: null,
             autoAllocate: true,
             productionOrderId: orderId,
+            tenantId: auth.tenantId,
           });
           const expiresAt = new Date(Date.now() + RESERVATION_TTL_MS).toISOString();
           await client.query(

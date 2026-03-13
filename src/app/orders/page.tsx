@@ -46,6 +46,46 @@ const defaultConditionCategories = ['Fibra', 'FibraCor', 'Corda', 'CordaCor', 'T
 const isMrpOrder = (order: Order) =>
   Boolean(order.isMrp ?? String(order.orderNumber ?? '').startsWith('MRP-'));
 
+function EditableInput({
+  value,
+  onSave,
+  onChangeClient,
+  ...props
+}: React.ComponentProps<typeof Input> & {
+  value: string;
+  onSave: (val: string) => void;
+  onChangeClient?: (val: string) => void;
+}) {
+  const [localValue, setLocalValue] = React.useState(value);
+  const [isFocused, setIsFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value);
+    }
+  }, [value, isFocused]);
+
+  return (
+    <Input
+      {...props}
+      value={localValue}
+      onFocus={(e) => {
+        setIsFocused(true);
+        props.onFocus?.(e);
+      }}
+      onChange={(e) => {
+        setLocalValue(e.target.value);
+        onChangeClient?.(e.target.value);
+      }}
+      onBlur={(e) => {
+        setIsFocused(false);
+        onSave(e.target.value);
+        props.onBlur?.(e);
+      }}
+    />
+  );
+}
+
 export default function OrdersPage() {
   const [db, setDb] = React.useState<{
     orders: Order[];
@@ -641,15 +681,14 @@ export default function OrdersPage() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <Label>Cliente <span className="text-destructive">*</span></Label>
-                  <Input
+                  <EditableInput
                     id="order-client-name"
-                    value={selectedOrder.clientName}
-                    onChange={(e) => updateOrderClientName(selectedOrder.id, e.target.value)}
-                    onBlur={(e) => persistOrderClientName(selectedOrder.id, e.target.value)}
+                    value={selectedOrder.clientName ?? ''}
+                    onChangeClient={(val) => updateOrderClientName(selectedOrder.id, val)}
+                    onSave={(val) => persistOrderClientName(selectedOrder.id, val)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        // Focus the first item qty if it exists
                         if (selectedOrder.items.length > 0) {
                           document.getElementById(`qty-${selectedOrder.items[0].id}`)?.focus();
                         }
@@ -771,18 +810,17 @@ export default function OrdersPage() {
                               </TableCell>
                               {/* `Cor` column removed; prefer item.conditions for color */}
                               <TableCell className="text-right">
-                                <Input
+                                <EditableInput
                                   id={`qty-${item.id}`}
                                   type="number"
-                                  value={item.qtyRequested}
-                                  onChange={(e) => {
-                                    const raw = e.target.value;
-                                    const qty = raw === '' ? 0 : Number(raw);
+                                  value={String(item.qtyRequested ?? '')}
+                                  onChangeClient={(val) => {
+                                    const qty = val === '' ? 0 : Number(val);
                                     updateOrderItemField(selectedOrder.id, item.id, {
                                       qtyRequested: Number.isFinite(qty) ? qty : 0,
                                     });
                                   }}
-                                  onBlur={(e) => onQtyBlurReserve(selectedOrder.id, item.id, Number(e.target.value || 0))}
+                                  onSave={(val) => onQtyBlurReserve(selectedOrder.id, item.id, Number(val || 0))}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.preventDefault();
@@ -819,12 +857,12 @@ export default function OrdersPage() {
                                 {item.qtyToProduce}
                               </TableCell>
                               <TableCell>
-                                <Input
+                                <EditableInput
                                   id={`color-${item.id}`}
                                   placeholder="Cor"
                                   value={item.color ?? ''}
-                                  onChange={(e) => updateOrderItemField(selectedOrder.id, item.id, { color: e.target.value })}
-                                  onBlur={(e) => persistOrderItemField(selectedOrder.id, item.id, { color: String(e.target.value ?? '') })}
+                                  onChangeClient={(val) => updateOrderItemField(selectedOrder.id, item.id, { color: val })}
+                                  onSave={(val) => persistOrderItemField(selectedOrder.id, item.id, { color: String(val ?? '') })}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.preventDefault();
@@ -861,11 +899,11 @@ export default function OrdersPage() {
                                     {item.conditions && item.conditions.length > 0 ? (
                                       item.conditions.map((cond, idx) => (
                                         <div key={idx} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-                                          <Input
+                                          <EditableInput
                                             placeholder="Campo (ex: Cor)"
                                             value={cond.key}
-                                            onChange={(e) => {
-                                              const nextVal = e.target.value;
+                                            onChangeClient={(val) => {
+                                              const nextVal = val;
                                               setDb((prev) => ({
                                                 ...prev,
                                                 orders: prev.orders.map((o) => {
@@ -884,15 +922,15 @@ export default function OrdersPage() {
                                                 }),
                                               }));
                                             }}
-                                            onBlur={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: e.target.value })}
+                                            onSave={(val) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: val })}
                                             className="h-8"
                                             disabled={isFinalized}
                                           />
-                                          <Input
+                                          <EditableInput
                                             placeholder="Valor (ex: Vermelho)"
                                             value={cond.value}
-                                            onChange={(e) => {
-                                              const nextVal = e.target.value;
+                                            onChangeClient={(val) => {
+                                              const nextVal = val;
                                               setDb((prev) => ({
                                                 ...prev,
                                                 orders: prev.orders.map((o) => {
@@ -911,7 +949,7 @@ export default function OrdersPage() {
                                                 }),
                                               }));
                                             }}
-                                            onBlur={(e) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: e.target.value })}
+                                            onSave={(val) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: val })}
                                             disabled={isFinalized}
                                           />
                                           <Button
