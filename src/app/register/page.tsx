@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import Link from 'next/link';
 import {
     Building2,
@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/logo';
 
 export default function RegisterPage() {
-    const router = useRouter();
+
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
