@@ -46,6 +46,46 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
+function EditableInput({
+  value,
+  onSave,
+  ...props
+}: React.ComponentProps<typeof Input> & {
+  value: string;
+  onSave: (val: string) => void;
+}) {
+  const [localValue, setLocalValue] = React.useState(value);
+  const [isFocused, setIsFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value);
+    }
+  }, [value, isFocused]);
+
+  return (
+    <Input
+      {...props}
+      value={localValue}
+      onFocus={(e) => {
+        setIsFocused(true);
+        props.onFocus?.(e);
+      }}
+      onChange={(e) => {
+        setLocalValue(e.target.value);
+        props.onChange?.(e);
+      }}
+      onBlur={(e) => {
+        setIsFocused(false);
+        if (localValue !== value) {
+          onSave(e.target.value);
+        }
+        props.onBlur?.(e);
+      }}
+    />
+  );
+}
+
 type LoadTasksOptions = {
   skipLoading?: boolean;
 };
@@ -236,35 +276,29 @@ export default function ProductionPage() {
       <TableCell className="text-sm text-muted-foreground">{task.color ?? ''}</TableCell>
       <TableCell className="text-right">{task.qtyToProduce}</TableCell>
       <TableCell className="p-1">
-        <Input
+        <EditableInput
           type="number"
           className="h-8 text-center"
-          value={task.producedQty ?? ''}
+          value={String(task.producedQty ?? '')}
           placeholder="Qtd."
-          onChange={(e) => {
-            const val = e.target.value === '' ? undefined : Number(e.target.value);
-            updateTaskLocal(task.id, 'producedQty', val);
-          }}
-          onBlur={(e) => {
-            const val = e.target.value === '' ? undefined : Number(e.target.value);
-            saveMeta(task.id, val, task.producedWeight);
+          onSave={(val) => {
+            const qty = val === '' ? undefined : Number(val);
+            updateTaskLocal(task.id, 'producedQty', qty);
+            saveMeta(task.id, qty, task.producedWeight);
           }}
         />
       </TableCell>
       <TableCell className="p-1">
-        <Input
+        <EditableInput
           type="number"
           step="0.01"
           className="h-8 text-center"
-          value={task.producedWeight ?? ''}
+          value={String(task.producedWeight ?? '')}
           placeholder="Peso"
-          onChange={(e) => {
-            const val = e.target.value === '' ? undefined : Number(e.target.value);
-            updateTaskLocal(task.id, 'producedWeight', val);
-          }}
-          onBlur={(e) => {
-            const val = e.target.value === '' ? undefined : Number(e.target.value);
-            saveMeta(task.id, task.producedQty, val);
+          onSave={(val) => {
+            const w = val === '' ? undefined : Number(val);
+            updateTaskLocal(task.id, 'producedWeight', w);
+            saveMeta(task.id, task.producedQty, w);
           }}
         />
       </TableCell>
@@ -331,33 +365,27 @@ export default function ProductionPage() {
         </div>
         <div className="flex flex-col gap-1 col-span-2">
           <div className="grid grid-cols-2 gap-2">
-            <Input
+            <EditableInput
               type="number"
               className="h-9 px-2 text-center text-xs font-bold"
-              value={task.producedQty ?? ''}
+              value={String(task.producedQty ?? '')}
               placeholder="Qtd."
-              onChange={(e) => {
-                const val = e.target.value === '' ? undefined : Number(e.target.value);
-                updateTaskLocal(task.id, 'producedQty', val);
-              }}
-              onBlur={(e) => {
-                const val = e.target.value === '' ? undefined : Number(e.target.value);
-                saveMeta(task.id, val, task.producedWeight);
+              onSave={(val) => {
+                const qty = val === '' ? undefined : Number(val);
+                updateTaskLocal(task.id, 'producedQty', qty);
+                saveMeta(task.id, qty, task.producedWeight);
               }}
             />
-            <Input
+            <EditableInput
               type="number"
               step="0.01"
               className="h-9 px-2 text-center text-xs font-bold"
-              value={task.producedWeight ?? ''}
+              value={String(task.producedWeight ?? '')}
               placeholder="Peso"
-              onChange={(e) => {
-                const val = e.target.value === '' ? undefined : Number(e.target.value);
-                updateTaskLocal(task.id, 'producedWeight', val);
-              }}
-              onBlur={(e) => {
-                const val = e.target.value === '' ? undefined : Number(e.target.value);
-                saveMeta(task.id, task.producedQty, val);
+              onSave={(val) => {
+                const w = val === '' ? undefined : Number(val);
+                updateTaskLocal(task.id, 'producedWeight', w);
+                saveMeta(task.id, task.producedQty, w);
               }}
             />
           </div>
@@ -409,12 +437,6 @@ export default function ProductionPage() {
             <CardDescription className="text-xs sm:text-sm">
               Tarefas de producao persistidas no banco. Concluir libera para o picking.
             </CardDescription>
-          </div>
-          <div className="flex items-center gap-3">
-             <Button size="sm" variant="outline" onClick={() => loadTasks({ skipLoading: true })} disabled={loading}>
-              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
           </div>
         </div>
       </CardHeader>

@@ -643,7 +643,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-center">
-                  <ResponsiveContainer width={180} height={120}>
+                  <ResponsiveContainer width="100%" height={120}>
                     <PieChart>
                       <Tooltip
                         {...glassyTooltipProps}
@@ -681,11 +681,10 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
                 <CardDescription>{dashboardLabels.sellersDescription}</CardDescription>
               </CardHeader>
               <CardContent>
-                <ChartContainer config={{ sellers: { label: 'Vendedores' } }}>
+                <ChartContainer config={{ sellers: { label: 'Vendedores' } }} className="h-[220px] w-full">
                   {ordersBySeller.length === 0 ? (
                     <EmptyState icon={ShoppingCart} title="Sem dados" description="Nenhum pedido registrado." />
                   ) : (
-                    <ResponsiveContainer width="100%" height={220}>
                       <BarChart layout="vertical" data={ordersBySeller} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
                         <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#888888', fontSize: 12 }} />
                         <YAxis type="category" dataKey="name" width={120} axisLine={false} tickLine={false} tick={{ fill: '#888888', fontSize: 12, fontWeight: 500 }} />
@@ -697,7 +696,6 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
                           ))}
                         </Bar>
                       </BarChart>
-                    </ResponsiveContainer>
                   )}
                 </ChartContainer>
               </CardContent>
@@ -709,11 +707,10 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
                 <CardDescription>{dashboardLabels.pickersDescription}</CardDescription>
               </CardHeader>
               <CardContent>
-                <ChartContainer config={{ pickers: { label: 'Separadores' } }}>
+                <ChartContainer config={{ pickers: { label: 'Separadores' } }} className="h-[220px] w-full">
                   {ordersByPicker.length === 0 ? (
                     <EmptyState icon={ShoppingCart} title="Sem dados" description="Nenhuma separação registrada." />
                   ) : (
-                    <ResponsiveContainer width="100%" height={220}>
                       <BarChart layout="vertical" data={ordersByPicker} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
                         <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#888888', fontSize: 12 }} />
                         <YAxis type="category" dataKey="name" width={120} axisLine={false} tickLine={false} tick={{ fill: '#888888', fontSize: 12, fontWeight: 500 }} />
@@ -725,7 +722,6 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
                           ))}
                         </Bar>
                       </BarChart>
-                    </ResponsiveContainer>
                   )}
                 </ChartContainer>
               </CardContent>

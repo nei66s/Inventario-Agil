@@ -165,7 +165,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const currentStatus = statusRes.rows[0]?.status
       const isFinalized = currentStatus === 'FINALIZADO' || currentStatus === 'SAIDA_CONCLUIDA'
 
-      if (isFinalized && !['restore', 'register_label_print', 'heartbeat'].includes(action)) {
+      if (isFinalized && !['restore', 'register_label_print', 'heartbeat', 'update_client', 'update_meta'].includes(action)) {
         await client.query('ROLLBACK')
         return NextResponse.json({ error: 'Pedido finalizado não pode ser modificado' }, { status: 400 })
       }
@@ -431,11 +431,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           [orderId, 'LABEL_PRINTED', auth.userId, `Etiqueta impressa (${body.format ?? 'EXIT_10x15'}).`, auth.tenantId]
         )
       } else if (action === 'save_order') {
+        const updates = [`status = CASE WHEN status IN ('draft','rascunho','RASCUNHO') THEN 'ABERTO' ELSE status END`];
+        const values: unknown[] = [orderId];
+
+        if (typeof body.clientName === 'string') {
+          updates.push(`client_name = $${values.length + 1}`);
+          values.push(body.clientName.trim() || null);
+        }
+        if (body.dueDate) {
+          updates.push(`due_date = $${values.length + 1}`);
+          values.push(new Date(body.dueDate));
+        }
+        if (body.volumeCount !== undefined) {
+          updates.push(`volume_count = $${values.length + 1}`);
+          values.push(Math.max(1, Number(body.volumeCount)));
+        }
+
         await client.query(
           `UPDATE orders
-           SET status = CASE WHEN status IN ('draft','rascunho','RASCUNHO') THEN 'ABERTO' ELSE status END
+           SET ${updates.join(', ')}
            WHERE id = $1`,
-          [orderId]
+          values
         )
       } else if (action === 'restore') {
         await client.query('UPDATE orders SET trashed_at = NULL WHERE id = $1', [orderId])

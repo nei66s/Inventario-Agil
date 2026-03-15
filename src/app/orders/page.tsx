@@ -79,7 +79,9 @@ function EditableInput({
       }}
       onBlur={(e) => {
         setIsFocused(false);
-        onSave(e.target.value);
+        if (localValue !== value) {
+          onSave(e.target.value);
+        }
         props.onBlur?.(e);
       }}
     />
@@ -318,7 +320,12 @@ export default function OrdersPage() {
       const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save_order' }),
+        body: JSON.stringify({ 
+          action: 'save_order',
+          clientName: order.clientName,
+          dueDate: order.dueDate,
+          volumeCount: order.volumeCount
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -535,10 +542,10 @@ export default function OrdersPage() {
           </div>
 
           <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
-              <div className="w-full lg:w-44">
-                <Select value={mainView} onValueChange={(v) => setMainView(v as 'open' | 'finalized')}>
-                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-center lg:gap-3">
+              <div className="col-span-2 sm:col-span-1 w-full lg:w-44">
+                <Select name="main-view" value={mainView} onValueChange={(v) => setMainView(v as 'open' | 'finalized')}>
+                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50 h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Visualização" />
                   </SelectTrigger>
                   <SelectContent>
@@ -547,9 +554,9 @@ export default function OrdersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-full lg:w-44">
-                <Select value={subView} onValueChange={(v) => setSubView(v as 'mine' | 'all')}>
-                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="col-span-1 w-full lg:w-44">
+                <Select name="sub-view" value={subView} onValueChange={(v) => setSubView(v as 'mine' | 'all')}>
+                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50 h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Filtrar por" />
                   </SelectTrigger>
                   <SelectContent>
@@ -558,9 +565,9 @@ export default function OrdersPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-full lg:w-44">
-                <Select value={mrpView} onValueChange={(value) => setMrpView(value as 'all' | 'mrp' | 'standard')}>
-                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="col-span-1 w-full lg:w-44">
+                <Select name="mrp-view" value={mrpView} onValueChange={(value) => setMrpView(value as 'all' | 'mrp' | 'standard')}>
+                  <SelectTrigger className="w-full bg-slate-50/50 dark:bg-slate-900/50 h-9 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="Origem" />
                   </SelectTrigger>
                   <SelectContent>
@@ -575,6 +582,8 @@ export default function OrdersPage() {
             <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                id="search-orders"
+                name="search-orders"
                 placeholder="Pesquisar por número ou cliente..."
                 className="w-full pl-10 bg-slate-50/50 dark:bg-slate-900/50 border-slate-200/60 dark:border-slate-800/60"
                 value={searchTerm}
@@ -683,6 +692,7 @@ export default function OrdersPage() {
                   <Label>Cliente <span className="text-destructive">*</span></Label>
                   <EditableInput
                     id="order-client-name"
+                    name="order-client-name"
                     value={selectedOrder.clientName ?? ''}
                     onChangeClient={(val) => updateOrderClientName(selectedOrder.id, val)}
                     onSave={(val) => persistOrderClientName(selectedOrder.id, val)}
@@ -695,12 +705,13 @@ export default function OrdersPage() {
                       }
                     }}
                     placeholder="Nome do cliente"
-                    disabled={isFinalized}
                   />
                 </div>
                 <div>
                   <Label>Entrega</Label>
                   <Input
+                    id="order-due-date"
+                    name="order-due-date"
                     type="date"
                     className="w-[140px]"
                     value={selectedOrder.dueDate.slice(0, 10)}
@@ -720,6 +731,8 @@ export default function OrdersPage() {
                 <div>
                   <Label>Volumes</Label>
                   <Input
+                    id="order-root-volume"
+                    name="order-root-volume"
                     type="number"
                     min={1}
                     className="w-[80px]"
@@ -742,6 +755,7 @@ export default function OrdersPage() {
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Select
+                  name="add-item-select"
                   onValueChange={(value) => addItem(selectedOrder.id, value)}
                   disabled={isFinalized}
                 >
@@ -766,9 +780,9 @@ export default function OrdersPage() {
                 </Button>
               </div>
 
-              <div className="max-h-[360px] overflow-auto">
-                <Table>
-                  <TableHeader>
+              <div className="max-h-[500px] overflow-auto">
+                <Table className="block lg:table w-full min-w-full lg:min-w-max">
+                  <TableHeader className="hidden lg:table-header-group">
                     <TableRow>
                       <TableHead className="w-[180px]">Material</TableHead>
                       <TableHead className="text-right w-[90px]" title="Quantidade solicitada">Qtd. Sol.</TableHead>
@@ -782,10 +796,10 @@ export default function OrdersPage() {
                       <TableHead className="text-center w-[50px]">Atos</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="block lg:table-row-group">
                     {selectedOrder.items.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={10} className="h-20 text-center text-muted-foreground">
+                      <TableRow className="block lg:table-row">
+                        <TableCell colSpan={10} className="block lg:table-cell h-20 text-center text-muted-foreground">
                           Adicione itens para iniciar a reserva.
                         </TableCell>
                       </TableRow>
@@ -803,103 +817,136 @@ export default function OrdersPage() {
 
                         return (
                           <React.Fragment key={item.id}>
-                            <TableRow>
-                              <TableCell>
-                                <p className="font-medium">{item.materialName}</p>
-                                <p className="text-xs text-muted-foreground">{item.materialId} - {item.uom}</p>
+                            <TableRow className="flex flex-col lg:table-row mb-0 border border-slate-200/60 dark:border-slate-800/60 lg:border-y lg:border-x-0 rounded-t-2xl lg:rounded-none bg-white dark:bg-slate-950 lg:bg-transparent shadow-sm lg:shadow-none mt-4 lg:mt-0 p-3 lg:p-0">
+                              <TableCell className="flex flex-col lg:table-cell items-start p-2 lg:px-4 lg:py-3">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase mb-1">Material</span>
+                                <div>
+                                  <p className="font-medium text-base lg:text-sm">{item.materialName}</p>
+                                  <p className="text-xs text-muted-foreground">{item.materialId} - {item.uom}</p>
+                                </div>
                               </TableCell>
-                              {/* `Cor` column removed; prefer item.conditions for color */}
-                              <TableCell className="text-right">
-                                <EditableInput
-                                  id={`qty-${item.id}`}
-                                  type="number"
-                                  value={String(item.qtyRequested ?? '')}
-                                  onChangeClient={(val) => {
-                                    const qty = val === '' ? 0 : Number(val);
-                                    updateOrderItemField(selectedOrder.id, item.id, {
-                                      qtyRequested: Number.isFinite(qty) ? qty : 0,
-                                    });
-                                  }}
-                                  onSave={(val) => onQtyBlurReserve(selectedOrder.id, item.id, Number(val || 0))}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      document.getElementById(`color-${item.id}`)?.focus();
-                                    }
-                                  }}
-                                  className="ml-auto w-full max-w-[7rem] text-right"
-                                  disabled={isFinalized}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Select
-                                  value={item.shortageAction ?? 'PRODUCE'}
-                                  disabled={isFinalized}
-                                  onValueChange={(value) => {
-                                    const action = value as 'PRODUCE' | 'BUY';
-                                    updateOrderItemField(selectedOrder.id, item.id, { shortageAction: action });
-                                    persistOrderItemField(selectedOrder.id, item.id, { shortageAction: action });
-                                  }}
-                                >
-                                  <SelectTrigger className="w-full min-w-[7rem]">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="PRODUCE">Produzir</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell className="text-right">{stock.onHand}</TableCell>
-                              <TableCell className="text-right">{reservedByOtherOrders}</TableCell>
-                              <TableCell className="text-right">{availableForThisOrder}</TableCell>
-                              <TableCell className="text-right font-semibold text-primary">{item.qtyReservedFromStock}</TableCell>
-                              <TableCell className="text-right font-semibold text-amber-600">
-                                {item.qtyToProduce}
-                              </TableCell>
-                              <TableCell>
-                                <EditableInput
-                                  id={`color-${item.id}`}
-                                  placeholder="Cor"
-                                  value={item.color ?? ''}
-                                  onChangeClient={(val) => updateOrderItemField(selectedOrder.id, item.id, { color: val })}
-                                  onSave={(val) => persistOrderItemField(selectedOrder.id, item.id, { color: String(val ?? '') })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      const btn = document.getElementById('btn-create-order');
-                                      if (btn) {
-                                        btn.focus();
-                                        btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                      }
-                                      toast({
-                                        title: 'Item pronto!',
-                                        description: 'Agora clique em "Criar pedido" para finalizar.',
+                              <TableCell className="flex items-center justify-between lg:table-cell lg:text-right p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Qtd. Solicitada</span>
+                                <div className="w-[140px] lg:w-full lg:max-w-[7rem] ml-auto">
+                                  <EditableInput
+                                    id={`qty-${item.id}`}
+                                    name={`qty-${item.id}`}
+                                    type="number"
+                                    value={String(item.qtyRequested ?? '')}
+                                    onSave={(val) => {
+                                      const qty = val === '' ? 0 : Number(val);
+                                      updateOrderItemField(selectedOrder.id, item.id, {
+                                        qtyRequested: Number.isFinite(qty) ? qty : 0,
                                       });
-                                    }
-                                  }}
-                                  className="w-full max-w-[7rem]"
-                                  disabled={isFinalized}
-                                />
+                                      onQtyBlurReserve(selectedOrder.id, item.id, Number(val || 0));
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        document.getElementById(`color-${item.id}`)?.focus();
+                                      }
+                                    }}
+                                    className="w-full text-right"
+                                    disabled={isFinalized}
+                                  />
+                                </div>
                               </TableCell>
-                              <TableCell className="text-center">
+                              <TableCell className="flex items-center justify-between lg:table-cell p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Ação</span>
+                                <div className="w-[140px] lg:w-full lg:min-w-[7rem] ml-auto">
+                                  <Select
+                                    name={`shortage-action-${item.id}`}
+                                    value={item.shortageAction ?? 'PRODUCE'}
+                                    disabled={isFinalized}
+                                    onValueChange={(value) => {
+                                      const action = value as 'PRODUCE' | 'BUY';
+                                      updateOrderItemField(selectedOrder.id, item.id, { shortageAction: action });
+                                      persistOrderItemField(selectedOrder.id, item.id, { shortageAction: action });
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="PRODUCE">Produzir</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </TableCell>
+                              <TableCell className="flex items-center justify-between lg:table-cell lg:text-right p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Estoque Disponível</span>
+                                <span>{stock.onHand}</span>
+                              </TableCell>
+                              <TableCell className="flex items-center justify-between lg:table-cell lg:text-right p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Reservas Outros</span>
+                                <span>{reservedByOtherOrders}</span>
+                              </TableCell>
+                              <TableCell className="flex items-center justify-between lg:table-cell lg:text-right p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Disp. P/ Este Pedido</span>
+                                <span>{availableForThisOrder}</span>
+                              </TableCell>
+                              <TableCell className="flex items-center justify-between lg:table-cell lg:text-right p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Reservado Agora</span>
+                                <span className="font-semibold text-primary">{item.qtyReservedFromStock}</span>
+                              </TableCell>
+                              <TableCell className="flex items-center justify-between lg:table-cell lg:text-right p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Produzir</span>
+                                <span className="font-semibold text-amber-600">{item.qtyToProduce}</span>
+                              </TableCell>
+                              <TableCell className="flex items-center justify-between lg:table-cell p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50">
+                                <span className="lg:hidden text-[10px] font-bold text-muted-foreground uppercase">Cor</span>
+                                <div className="w-[140px] lg:w-full lg:max-w-[7rem] ml-auto">
+                                  <EditableInput
+                                    id={`color-${item.id}`}
+                                    name={`color-${item.id}`}
+                                    placeholder="Cor"
+                                    value={item.color ?? ''}
+                                    onSave={(val) => {
+                                      updateOrderItemField(selectedOrder.id, item.id, { color: val });
+                                      persistOrderItemField(selectedOrder.id, item.id, { color: String(val ?? '') });
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const btn = document.getElementById('btn-create-order');
+                                        if (btn) {
+                                          btn.focus();
+                                          btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }
+                                        toast({
+                                          title: 'Item pronto!',
+                                          description: 'Agora clique em "Criar pedido" para finalizar.',
+                                        });
+                                      }
+                                    }}
+                                    className="w-full"
+                                    disabled={isFinalized}
+                                  />
+                                </div>
+                              </TableCell>
+                              <TableCell className="flex justify-end lg:justify-center lg:table-cell p-2 lg:px-4 lg:py-3 border-t lg:border-t-0 border-slate-100 dark:border-slate-800/50 bg-slate-50 lg:bg-transparent dark:bg-slate-900/50">
                                 <Button
                                   variant="ghost"
+                                  className="w-full lg:w-auto text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                                   onClick={() => removeOrderItem(selectedOrder.id, item.id)}
                                   disabled={isFinalized}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-4 w-4 mr-2 lg:mr-0" />
+                                  <span className="lg:hidden font-medium">Remover item</span>
                                 </Button>
                               </TableCell>
                             </TableRow>
-                            <TableRow>
-                              <TableCell colSpan={10} className="bg-muted/30">
+                            <TableRow className="block lg:table-row border border-t-0 lg:border-t border-slate-200/60 dark:border-slate-800/60 rounded-b-2xl lg:rounded-none mb-6 lg:mb-0 shadow-sm lg:shadow-none bg-slate-50/50 lg:bg-transparent dark:bg-slate-900/30 overflow-hidden">
+                              <TableCell colSpan={10} className="block lg:table-cell bg-muted/30 lg:bg-transparent p-3 lg:p-4">
                                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                  <div className="space-y-2">
+                                  <div className="space-y-2 min-w-0">
                                     <Label>Condicao especifica do item</Label>
                                     {item.conditions && item.conditions.length > 0 ? (
                                       item.conditions.map((cond, idx) => (
                                         <div key={idx} className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
                                           <EditableInput
+                                            id={`cond-key-${item.id}-${idx}`}
+                                            name={`cond-key-${item.id}-${idx}`}
                                             placeholder="Campo (ex: Cor)"
                                             value={cond.key}
                                             onChangeClient={(val) => {
@@ -927,6 +974,8 @@ export default function OrdersPage() {
                                             disabled={isFinalized}
                                           />
                                           <EditableInput
+                                            id={`cond-val-${item.id}-${idx}`}
+                                            name={`cond-val-${item.id}-${idx}`}
                                             placeholder="Valor (ex: Vermelho)"
                                             value={cond.value}
                                             onChangeClient={(val) => {
@@ -1009,6 +1058,7 @@ export default function OrdersPage() {
                                                 Categoria
                                               </Label>
                                               <Select
+                                                name="condition-category"
                                                 value={
                                                   conditionPickerSelection.categoryId !== null
                                                     ? String(conditionPickerSelection.categoryId)
@@ -1042,6 +1092,7 @@ export default function OrdersPage() {
                                                 Valor
                                               </Label>
                                               <Select
+                                                name="condition-value"
                                                 value={
                                                   conditionPickerSelection.valueId !== null
                                                     ? String(conditionPickerSelection.valueId)
@@ -1098,13 +1149,13 @@ export default function OrdersPage() {
                                       </div>
                                     )}
                                   </div>
-                                  <div className="rounded-xl border border-border/70 bg-background p-3 text-sm">
+                                  <div className="rounded-xl border border-border/70 bg-background p-3 text-sm min-w-0">
                                     <p className="mb-2 font-medium">Reservas ativas</p>
                                     {reservations.length === 0 ? (
                                       <p className="text-muted-foreground">Sem reserva ativa para este item.</p>
                                     ) : (
                                       reservations.map((reservation) => (
-                                        <p key={reservation.id} className="text-xs">
+                                        <p key={reservation.id} className="text-xs break-words text-muted-foreground mt-1">
                                           reservado por {reservation.userName} no pedido {selectedOrder.orderNumber} ({reservation.qty}) - expira em {formatDate(reservation.expiresAt)}
                                         </p>
                                       ))

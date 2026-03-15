@@ -205,10 +205,6 @@ export default function PickingPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="font-headline">Fila de picking</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => loadData({ skipLoading: true })} disabled={loading}>
-              <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
           </div>
           <CardDescription>Filtre por prontidao e conclua separacao com baixa de saida simulada.</CardDescription>
           <div className="space-y-2">

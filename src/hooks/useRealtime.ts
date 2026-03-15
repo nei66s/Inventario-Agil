@@ -12,6 +12,7 @@ export function useRealtime() {
         isMutedRef.current = isMuted;
     }, [isMuted]);
     const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const reconnectAttemptsRef = useRef(0);
     const needsRefreshRef = useRef(false);
 
     useEffect(() => {
@@ -65,6 +66,7 @@ export function useRealtime() {
                         return;
                     }
                     console.log("[realtime] ✅ Connected successfully to", wsUrl);
+                    reconnectAttemptsRef.current = 0;
                     setIsConnected(true);
                     if (reconnectTimeoutRef.current) {
                         clearTimeout(reconnectTimeoutRef.current);
@@ -121,27 +123,33 @@ export function useRealtime() {
                 };
 
                 ws.onclose = (event) => {
-                    console.warn("[realtime] ❌ WebSocket closed", event.code, event.reason);
+                    if (event.code !== 1000) {
+                        // don't warn prominently on every reconnect loop in dev
+                        console.debug("[realtime] WebSocket closed", event.code, event.reason);
+                    }
                     wsRef.current = null;
                     setIsConnected(false);
                     setIsConnecting(false);
 
                     if (isMounted) {
-                        console.log("[realtime] Scheduled reconnection in 3s...");
-                        reconnectTimeoutRef.current = setTimeout(connect, 3000);
+                        const backoff = Math.min(30000, 1000 * Math.pow(1.5, reconnectAttemptsRef.current || 0));
+                        reconnectAttemptsRef.current = (reconnectAttemptsRef.current || 0) + 1;
+                        console.debug(`[realtime] Scheduled reconnection in ${Math.round(backoff/1000)}s...`);
+                        reconnectTimeoutRef.current = setTimeout(connect, backoff);
                     }
                 };
 
                 ws.onerror = (err) => {
-                    // Browser WebSocket error events are opaque and commonly occur during reconnect.
-                    // Keep this as warning so local dev is not blocked by noisy console overlays.
-                    console.warn("[realtime] WebSocket error:", err);
+                    // Keep this as debug so local dev is not blocked by noisy console overlays.
+                    console.debug("[realtime] WebSocket error:", err);
                     ws.close();
                 };
             } catch (err) {
-                console.error("[realtime] 🚨 Error creating WebSocket:", err);
+                console.debug("[realtime] Error creating WebSocket:", err);
                 if (isMounted) {
-                    reconnectTimeoutRef.current = setTimeout(connect, 3000);
+                    const backoff = Math.min(30000, 1000 * Math.pow(1.5, reconnectAttemptsRef.current || 0));
+                    reconnectAttemptsRef.current = (reconnectAttemptsRef.current || 0) + 1;
+                    reconnectTimeoutRef.current = setTimeout(connect, backoff);
                 }
             }
         }
