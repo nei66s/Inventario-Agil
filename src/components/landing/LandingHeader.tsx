@@ -60,9 +60,6 @@ export function LandingHeader() {
                     ) : (
                         <div className="h-11 w-11 rounded-full bg-slate-100/50 animate-pulse" />
                     )}
-                    <Button variant="outline" asChild className="hidden sm:inline-flex border-indigo-600/30 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30">
-                        <Link href="/platform/tenants">Super Admin</Link>
-                    </Button>
                     <Button variant="ghost" asChild className="hidden sm:inline-flex">
                         <Link href="/login">Entrar</Link>
                     </Button>

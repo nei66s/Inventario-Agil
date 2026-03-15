@@ -228,7 +228,6 @@ function AppSidebar() {
                     { label: 'Saldo de Estoque', tab: 'stock', icon: Warehouse },
                     { label: 'Ajustes de Inventário', tab: 'adjustments', icon: RefreshCcw },
                     { label: 'Reservas e Validade', tab: 'reservations', icon: Clock },
-                    { label: 'Inbox (Reservas Diretas)', tab: 'inbox', icon: Inbox },
                     { label: 'Planejamento MRP', tab: 'mrp', icon: AreaChart },
                   ].map((sub) => (
                     <Link
@@ -323,24 +322,30 @@ function AppSidebar() {
             </SidebarMenu>
           </SidebarGroup>
           <SidebarGroup className="p-1">
-            <SidebarGroupLabel>Pedidos</SidebarGroupLabel>
             <SidebarMenu>
-              <SidebarMenuItem key="/orders">
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/orders')} tooltip="Pedidos">
-                  <Link href="/orders">
-                    <ShoppingCart />
-                    <span>Pedidos</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem key="/orders/trash">
-                <SidebarMenuButton asChild isActive={pathname.startsWith('/orders/trash')} tooltip="Lixeira">
-                  <Link href="/orders/trash">
-                    <Trash2 />
-                    <span>Lixeira</span>
-                  </Link>
-                </SidebarMenuButton>
+              <SidebarMenuItem>
+                <div className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground/70 select-none">
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Pedidos</span>
+                </div>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders') && !pathname.startsWith('/orders/trash')}>
+                      <Link href="/orders" className="flex items-center gap-2">
+                        <ShoppingCart className="h-3.5 w-3.5" />
+                        <span>Pedidos</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname.startsWith('/orders/trash')}>
+                      <Link href="/orders/trash" className="flex items-center gap-2">
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Lixeira</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
@@ -377,14 +382,7 @@ function AppSidebar() {
                       </Link>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'inbox'}>
-                      <Link href="/inventory?tab=inbox" className="flex items-center gap-2">
-                        <Bell className="h-3.5 w-3.5" />
-                        <span>Inbox</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
+
                   <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={isInventoryActive && currentTab === 'mrp'}>
                       <Link href="/inventory?tab=mrp" className="flex items-center gap-2">
@@ -399,45 +397,59 @@ function AppSidebar() {
           </SidebarGroup>
 
           <SidebarGroup className="p-1">
-            <SidebarGroupLabel>Operacoes</SidebarGroupLabel>
             <SidebarMenu>
-              {navItems
-                .filter(
-                  (i) =>
-                    i.href !== '/materials' &&
-                    i.href !== '/admin' &&
-                    i.href !== '/orders' &&
-                    i.href !== '/orders/trash' &&
-                    i.href !== '/dashboard'
-                )
-                .map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+              <SidebarMenuItem>
+                <div className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground/70 select-none">
+                  <Factory className="h-4 w-4" />
+                  <span>Operações</span>
+                </div>
+                <SidebarMenuSub>
+                  {navItems
+                    .filter(
+                      (i) =>
+                        i.href !== '/materials' &&
+                        i.href !== '/admin' &&
+                        i.href !== '/orders' &&
+                        i.href !== '/orders/trash' &&
+                        i.href !== '/dashboard'
+                    )
+                    .map((item) => (
+                      <SidebarMenuSubItem key={item.href}>
+                        <SidebarMenuSubButton asChild isActive={pathname.startsWith(item.href)}>
+                          <Link href={item.href} className="flex items-center gap-2">
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span>{item.label}</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                </SidebarMenuSub>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
 
           <SidebarGroup className="p-1">
-            <SidebarGroupLabel>Administracao</SidebarGroupLabel>
             <SidebarMenu>
-              {navItems
-                .filter((i) => i.href === '/materials' || i.href === '/admin')
-                .map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={pathname.startsWith(item.href)} tooltip={item.label}>
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+              <SidebarMenuItem>
+                <div className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-semibold text-sidebar-foreground/70 select-none">
+                  <Shield className="h-4 w-4" />
+                  <span>Administração</span>
+                </div>
+                <SidebarMenuSub>
+                  {navItems
+                    .filter((i) => i.href === '/materials' || i.href === '/admin')
+                    .map((item) => (
+                      <SidebarMenuSubItem key={item.href}>
+                        <SidebarMenuSubButton asChild isActive={pathname.startsWith(item.href)}>
+                          <Link href={item.href} className="flex items-center gap-2">
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span>{item.label}</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                </SidebarMenuSub>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
         </div>

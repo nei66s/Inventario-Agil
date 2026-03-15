@@ -388,6 +388,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           nextStatus,
           auth.userId,
         ])
+        
+        // Ensure no dangling production tasks or reservations remain
+        await client.query('DELETE FROM production_tasks WHERE order_id = $1', [orderId])
+        await client.query('DELETE FROM production_reservations WHERE order_id = $1', [orderId])
+        
         await client.query(
           `INSERT INTO audit_events (order_id, action, actor, timestamp, details, tenant_id)
            VALUES ($1, $2, $3, now(), $4, $5)`,
@@ -439,6 +444,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (trashed) {
           await client.query('UPDATE orders SET trashed_at = NOW(), status = $2 WHERE id = $1', [orderId, 'CANCELADO'])
           await client.query('DELETE FROM production_tasks WHERE order_id = $1', [orderId])
+          await client.query('DELETE FROM production_reservations WHERE order_id = $1', [orderId])
         } else if (body.trashed === false) {
           await client.query('UPDATE orders SET trashed_at = NULL WHERE id = $1', [orderId])
         }
