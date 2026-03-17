@@ -1,4 +1,5 @@
 import * as React from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 type InventoryReceipt = { postedAt?: string; items?: { materialId?: string; qty?: number }[] };
 type ProductionTask = {
   id?: string;
+  orderId?: string;
   materialId?: string;
   status?: 'PENDING' | 'IN_PROGRESS' | 'DONE';
   updatedAt?: string;
@@ -143,6 +145,7 @@ export default function MrpPanel() {
   const [confirmationChecked, setConfirmationChecked] = React.useState(false);
   const [confirmationBusy, setConfirmationBusy] = React.useState(false);
   const [confirmationError, setConfirmationError] = React.useState<string | null>(null);
+  const [replenishOnly, setReplenishOnly] = React.useState(true);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -269,17 +272,17 @@ export default function MrpPanel() {
   }, [productionTasks]);
 
   const getSuggestionStatus = (materialId?: string) => {
-    const fallback = { label: 'Necessita produção', variant: 'destructive' as const };
+    const fallback = { label: 'Necessita produção', variant: 'destructive' as const, hasPending: false, orderId: '' };
     if (!materialId) return fallback;
     const tasks = tasksByMaterial.get(materialId);
     if (!tasks || tasks.length === 0) return fallback;
     const inProgress = tasks.find((task) => task.status === 'IN_PROGRESS');
-    if (inProgress) return { label: 'Em produção', variant: 'info' as const };
+    if (inProgress) return { label: 'Em produção', variant: 'info' as const, hasPending: true, orderId: inProgress.orderId };
     const pending = tasks.find((task) => task.status === 'PENDING');
-    if (pending) return { label: 'Produção agendada', variant: 'warning' as const };
+    if (pending) return { label: 'Produção agendada', variant: 'warning' as const, hasPending: true, orderId: pending.orderId };
     const done = tasks.find((task) => task.status === 'DONE');
-    if (done) return { label: 'Produzido recentemente', variant: 'positive' as const };
-    return fallback;
+    if (done) return { label: 'Produzido recentemente', variant: 'positive' as const, hasPending: false, orderId: '' };
+    return { ...fallback, hasPending: false };
   };
 
   const toggleExpand = (materialId: string) => {
@@ -293,14 +296,6 @@ export default function MrpPanel() {
     setDialogOrderId('');
     setDialogOrderNumber(null);
     setDialogOpen(true);
-    try {
-      const order = await createDraftOrder();
-      setDialogOrderId(order.id);
-      setDialogOrderNumber(order.orderNumber ?? null);
-    } catch (err) {
-      // show error in dialog but keep dialog open so user can retry
-      setDialogError(errorMessage(err));
-    }
   };
 
   const handleOpenSuggestionDialog = (suggestion: SuggestionHeuristic) => {
@@ -379,12 +374,16 @@ export default function MrpPanel() {
     setDialogBusy(false);
   };
 
-  async function createDraftOrder() {
+  async function createDraftOrder(isReplenish: boolean) {
     const response = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // Create MRP orders as open (not draft)
-      body: JSON.stringify({ status: 'aberto', source: 'mrp' }),
+      body: JSON.stringify({
+        status: 'rascunho',
+        source: isReplenish ? 'mrp_estoque' : 'mrp',
+        clientName: isReplenish ? 'Reposição Interna' : '',
+      }),
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
@@ -402,7 +401,7 @@ export default function MrpPanel() {
     try {
       let targetOrderId = dialogOrderId;
       if (!targetOrderId) {
-        const order = await createDraftOrder();
+        const order = await createDraftOrder(replenishOnly);
         targetOrderId = order.id;
         setDialogOrderId(order.id);
       }
@@ -544,11 +543,16 @@ export default function MrpPanel() {
                                 size="sm"
                                 variant="secondary"
                                 onClick={() => handleOpenDialog(s)}
-                                disabled={!s.confirmed || dialogBusy}
-                                title={!s.confirmed ? 'Confirme a sugestão antes de criar ordem' : undefined}
+                                disabled={!s.confirmed || dialogBusy || flowStatus.hasPending}
+                                title={!s.confirmed ? 'Confirme a sugestão antes de criar ordem' : flowStatus.hasPending ? 'Já existe uma ordem de produção em andamento' : undefined}
                               >
-                                Criar ordem de produção
+                                {flowStatus.hasPending ? 'Produção pendente' : 'Criar ordem de produção'}
                               </Button>
+                              {flowStatus.hasPending && flowStatus.orderId && (
+                                <Button size="sm" variant="link" asChild className="px-2">
+                                  <Link href={`/orders?orderId=${flowStatus.orderId}`}>Acessar pedido</Link>
+                                </Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -665,11 +669,16 @@ export default function MrpPanel() {
                        </div>
                        <Button 
                           className="w-full h-10 font-bold text-xs"
-                          disabled={!s.confirmed || dialogBusy}
+                          disabled={!s.confirmed || dialogBusy || flowStatus.hasPending}
                           onClick={() => handleOpenDialog(s)}
                        >
-                          Criar Ordem de Produção
+                          {flowStatus.hasPending ? 'Produção pendente' : 'Criar Ordem de Produção'}
                        </Button>
+                       {flowStatus.hasPending && flowStatus.orderId && (
+                         <Button variant="link" asChild className="w-full h-8 text-xs px-2">
+                           <Link href={`/orders?orderId=${flowStatus.orderId}`}>Ver pedido {flowStatus.orderId.replace('O-', '')}</Link>
+                         </Button>
+                       )}
                     </div>
 
                     {expandedMaterialId === s.materialId && (
@@ -715,12 +724,22 @@ export default function MrpPanel() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="production-order">Pedido associado</Label>
+              <Label>Pedido associado</Label>
               <Input
-                id="production-order"
-                readOnly
-                value={dialogOrderNumber ?? dialogOrderId ?? 'Gerando pedido...'}
+                disabled
+                className="bg-muted text-muted-foreground font-mono"
+                value="Chave única automática (Ex: MRP-1234)"
               />
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <Checkbox
+                id="mrp-replenish-only"
+                checked={replenishOnly}
+                onCheckedChange={(c) => setReplenishOnly(Boolean(c))}
+              />
+              <label htmlFor="mrp-replenish-only" className="text-sm font-medium">
+                Apenas alimentar estoque (não enviar para separação)
+              </label>
             </div>
             {dialogError ? <p className="text-sm text-destructive">{dialogError}</p> : null}
           </div>

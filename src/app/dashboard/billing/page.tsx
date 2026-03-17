@@ -98,13 +98,23 @@ export default function BillingPage() {
                                 </div>
 
                                 <div className="flex flex-col gap-4">
-                                    <div className="flex items-baseline gap-1">
-                                        <span className="text-4xl font-black text-slate-900 dark:text-white">
-                                            R$ {((interval === 'month' ? 300 : 3000) * quantity).toLocaleString('pt-BR')}
-                                        </span>
-                                        <span className="text-slate-500 font-medium whitespace-nowrap">
-                                            / {quantity} {interval === 'month' ? (quantity > 1 ? 'meses' : 'mês') : (quantity > 1 ? 'anos' : 'ano')}
-                                        </span>
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg font-bold text-slate-400 dark:text-slate-500 line-through decoration-red-500/50 decoration-2">
+                                                R$ {((interval === 'month' ? 499 : 4990) * quantity).toLocaleString('pt-BR')}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                                Promoção por Tempo Limitado
+                                            </span>
+                                        </div>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-4xl font-black text-slate-900 dark:text-white">
+                                                R$ {((interval === 'month' ? 300 : 3000) * quantity).toLocaleString('pt-BR')}
+                                            </span>
+                                            <span className="text-slate-500 font-medium whitespace-nowrap">
+                                                / {quantity} {interval === 'month' ? (quantity > 1 ? 'meses' : 'mês') : (quantity > 1 ? 'anos' : 'ano')}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-3">

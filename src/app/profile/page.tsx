@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { UserCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ type ProfilePatchResponse = {
 
 export default function ProfilePage() {
   const { user: authUser, loading: authLoading, refresh } = useAuthUser();
+  const router = useRouter();
   const { toast } = useToast();
 
   const [name, setName] = useState('');
@@ -62,7 +64,6 @@ export default function ProfilePage() {
       const payload: Record<string, string> = {
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        avatarUrl: avatarUrl.trim(),
       };
       if (password.trim()) {
         payload.password = password.trim();
@@ -152,8 +153,37 @@ export default function ProfilePage() {
                       setLocalFile(file);
                       setUploading(true);
                       try {
+                        // Compress before upload to avoid HUGE files (413 errors and slow queries)
+                        const image = new Image();
+                        image.src = URL.createObjectURL(file);
+                        await new Promise((resolve) => { image.onload = resolve; });
+                        
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const MAX_SIZE = 256;
+                        let width = image.width;
+                        let height = image.height;
+                        if (width > height) {
+                          if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                          }
+                        } else {
+                          if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                          }
+                        }
+                        canvas.width = width;
+                        canvas.height = height;
+                        ctx?.drawImage(image, 0, 0, width, height);
+                        
+                        const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, file.type, 0.8));
+                        if (!blob) throw new Error('Falha ao processar imagem');
+
                         const fd = new FormData();
-                        fd.append('avatar', file);
+                        fd.append('avatar', blob, file.name || 'avatar.png');
+                        
                         const res = await fetch(`/api/users/${authUser.id}/avatar`, {
                           method: 'POST',
                           body: fd,
@@ -163,7 +193,9 @@ export default function ProfilePage() {
                         if (!res.ok) throw new Error(json.message || 'Upload falhou');
                         setAvatarUrl(json.avatarUrl ?? '');
                         setPreviewUrl(json.avatarUrl ?? previewUrl);
-                        toast({ title: 'Upload concluido' });
+                        toast({ title: 'Upload concluído e comprimido com sucesso' });
+                        await refresh();
+                        router.refresh();
                       } catch (err: unknown) {
                         const message = err instanceof Error ? err.message : 'Erro no upload';
                         toast({ title: 'Erro', description: message, variant: 'destructive' });

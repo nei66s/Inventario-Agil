@@ -35,6 +35,8 @@ export function useAuthUser(initialUser: AuthUser | null = null) {
   useEffect(() => {
     if (!initialUser) {
       refresh();
+    } else {
+      setUser(initialUser);
     }
   }, [refresh, initialUser]);
 

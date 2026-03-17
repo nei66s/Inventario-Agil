@@ -58,6 +58,7 @@ function EditableInput({
 }) {
   const [localValue, setLocalValue] = React.useState(value);
   const [isFocused, setIsFocused] = React.useState(false);
+  const [initialValue, setInitialValue] = React.useState(value);
 
   React.useEffect(() => {
     if (!isFocused) {
@@ -71,6 +72,7 @@ function EditableInput({
       value={localValue}
       onFocus={(e) => {
         setIsFocused(true);
+        setInitialValue(localValue);
         props.onFocus?.(e);
       }}
       onChange={(e) => {
@@ -79,7 +81,7 @@ function EditableInput({
       }}
       onBlur={(e) => {
         setIsFocused(false);
-        if (localValue !== value) {
+        if (localValue !== initialValue) {
           onSave(e.target.value);
         }
         props.onBlur?.(e);
@@ -346,6 +348,7 @@ export default function OrdersPage() {
   // default to show all orders ("Todos") instead of "Meus pedidos"
   const [subView, setSubView] = React.useState<'mine' | 'all'>('all');
   const [mrpView, setMrpView] = React.useState<'all' | 'mrp' | 'standard'>('all');
+  const [defaultOrderId, setDefaultOrderId] = React.useState<string | null>(null);
   const [mounted, setMounted] = React.useState(false);
   const [preconditionCategories, setPreconditionCategories] = React.useState<ConditionCategory[]>([]);
   const [conditionsLoading, setConditionsLoading] = React.useState(false);
@@ -394,8 +397,10 @@ export default function OrdersPage() {
       const sp = new URLSearchParams(window.location.search);
       const v = sp.get('view') as 'open' | 'finalized' | null;
       const sv = sp.get('sub') as 'mine' | 'all' | null;
+      const targetOrderId = sp.get('orderId');
       if (v) setMainView(v);
       if (sv) setSubView(sv);
+      if (targetOrderId) setDefaultOrderId(targetOrderId);
     } catch {
       // ignore
     }
@@ -487,11 +492,14 @@ export default function OrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(filteredOrders[0]?.id ?? null);
 
   React.useEffect(() => {
-    if (!filteredOrders.find((o) => o.id === selectedOrderId)) {
+    if (defaultOrderId && filteredOrders.find((o) => o.id === defaultOrderId)) {
+      setSelectedOrderId(defaultOrderId);
+      setDefaultOrderId(null);
+    } else if (!filteredOrders.find((o) => o.id === selectedOrderId)) {
       setSelectedOrderId(filteredOrders[0]?.id ?? null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredOrders]);
+  }, [filteredOrders, defaultOrderId]);
 
   const selectedOrder = db.orders.find((item) => item.id === selectedOrderId) ?? null;
   const isFinalized = selectedOrder ? (selectedOrder.status === 'FINALIZADO' || selectedOrder.status === 'SAIDA_CONCLUIDA') : false;

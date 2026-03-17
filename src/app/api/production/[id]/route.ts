@@ -39,7 +39,7 @@ function toApiTask(row: DbRow) {
     updatedAt: row.updated_at,
     producedQty: row.produced_qty !== null && row.produced_qty !== undefined ? Number(row.produced_qty) : undefined,
     producedWeight: row.produced_weight !== null && row.produced_weight !== undefined ? Number(row.produced_weight) : undefined,
-    isMrp: String(row.order_source ?? '').toLowerCase() === 'mrp',
+    isMrp: String(row.order_source ?? '').toLowerCase().startsWith('mrp'),
     labelPrinted: row.label_printed,
   }
 }

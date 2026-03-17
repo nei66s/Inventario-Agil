@@ -48,7 +48,7 @@ function toApiTask(row: DbRow) {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    isMrp: String(row.order_source ?? '').toLowerCase() === 'mrp',
+    isMrp: String(row.order_source ?? '').toLowerCase().startsWith('mrp'),
     color: row.color ?? '',
     description: row.description ?? undefined,
     conditions: parseJson(row.conditions, []),
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
          AND pt.tenant_id = $1::uuid
          AND NOT (
            lower(coalesce(o.status, '')) IN ('rascunho', 'draft')
-           AND lower(coalesce(o.source, '')) <> 'mrp'
+           AND lower(coalesce(o.source, '')) NOT LIKE 'mrp%'
          )
        ORDER BY pt.created_at ASC, pt.id ASC`,
       [auth.tenantId]
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
       const orderSrcRes = await query<{ source: string }>('SELECT source FROM orders WHERE id = $1', [createdRow.order_id])
       const orderSource = String(orderSrcRes.rows[0]?.source ?? '').toLowerCase()
       const resultingQty = Number(createdRow.qty_to_produce ?? 0)
-      if (orderSource === 'mrp' && resultingQty > 0) {
+      if (orderSource.startsWith('mrp') && resultingQty > 0) {
         const existing = await query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [createdRow.order_id, createdRow.material_id])
         if (existing.rowCount > 0) {
           await query(

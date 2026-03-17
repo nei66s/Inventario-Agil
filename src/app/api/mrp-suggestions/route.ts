@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
           updated_at,
           tenant_id
         ) VALUES ($1,$2,$3,$4,$5,'CONFIRMED',$6,now(),now(),now(), $7)
-        ON CONFLICT (material_id, tenant_id)
+        ON CONFLICT (tenant_id, material_id)
         DO UPDATE SET
           suggested_reorder_point = EXCLUDED.suggested_reorder_point,
           suggested_min_stock = EXCLUDED.suggested_min_stock,

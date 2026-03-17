@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
-import fs from 'fs/promises';
-import path from 'path';
+import { revalidateTag } from 'next/cache';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,20 +20,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const arrayBuffer = await (file as any).arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
-    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'avatars');
-    await fs.mkdir(uploadsDir, { recursive: true });
-
-    const originalName = (file as any).name || `${targetId}`;
-    const ext = originalName.includes('.') ? originalName.split('.').pop() : 'png';
-    const filename = `${targetId}-${Date.now()}.${ext}`;
-    const filepath = path.join(uploadsDir, filename);
-
-    await fs.writeFile(filepath, buffer);
-
-    const avatarUrl = `/uploads/avatars/${filename}`;
+    
+    // Convert to base64
+    const mimeType = (file as any).type || 'image/png';
+    const base64String = buffer.toString('base64');
+    const avatarUrl = `data:${mimeType};base64,${base64String}`;
 
     await query('UPDATE users SET avatar_url = $1 WHERE id = $2 AND tenant_id = $3', [avatarUrl, targetId, auth.tenantId]);
+
+    revalidateTag(`user-${targetId}`);
 
     return NextResponse.json({ avatarUrl });
   } catch (err) {

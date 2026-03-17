@@ -41,6 +41,7 @@ type ApiOrder = {
   trashedAt: string | null
   hasPendingProduction?: boolean
   isMrp?: boolean
+  source?: string
 }
 
 type OrderRow = {
@@ -233,7 +234,8 @@ export async function GET(request: NextRequest) {
           total: Number(r.total ?? 0),
           trashedAt: r.trashed_at ? (r.trashed_at instanceof Date ? r.trashed_at.toISOString() : String(r.trashed_at)) : null,
           hasPendingProduction: Boolean(r.has_pending_production ?? false),
-          isMrp: String(r.order_source ?? '').toLowerCase() === 'mrp',
+          isMrp: String(r.order_source ?? '').toLowerCase().startsWith('mrp'),
+          source: String(r.order_source ?? '').toLowerCase(),
         })
       }
       if (r.item_id) {
@@ -320,7 +322,7 @@ export async function POST(request: NextRequest) {
     const clientName = typeof payload.clientName === 'string' ? payload.clientName.trim() : ''
     const dueDate = payload.dueDate ? new Date(payload.dueDate) : null
     const sourceRaw = String(payload.source ?? '').trim().toLowerCase()
-    const source = sourceRaw === 'mrp' ? 'mrp' : 'manual'
+    const source = sourceRaw === 'mrp' ? 'mrp' : sourceRaw === 'mrp_estoque' ? 'mrp_estoque' : 'manual'
 
     const client = await query(
       'INSERT INTO orders (status, total, created_by, client_name, due_date, source, tenant_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, created_at',
@@ -331,7 +333,7 @@ export async function POST(request: NextRequest) {
     const createdIso = new Date(createdAt).toISOString()
 
     let orderNumber: string
-    if (source === 'mrp') {
+    if (source.startsWith('mrp')) {
       orderNumber = `MRP-${orderId}`
     } else {
       orderNumber = await generateManualOrderNumber(createdIso, auth.tenantId)

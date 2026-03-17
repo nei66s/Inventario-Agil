@@ -1,22 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import dotenv from 'dotenv';
+dotenv.config();
+import { query } from '../src/lib/db';
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await requireAuth(request);
-
-    const res = await query<{ orders: string; picking: string; production: string }>(
-      `SELECT 
+async function run() {
+    try {
+        const q1 = `EXPLAIN ANALYZE SELECT 
          COUNT(DISTINCT CASE 
            WHEN o.trashed_at IS NULL 
             AND lower(coalesce(o.status, '')) NOT IN ('finalizado', 'saida_concluida') 
            THEN o.id END) as orders,
            
-        COUNT(DISTINCT CASE 
+         COUNT(DISTINCT CASE 
            WHEN o.trashed_at IS NULL 
             AND lower(coalesce(o.status, '')) IN ('em_picking', 'aberto', 'saida_concluida') 
-            AND lower(coalesce(o.source, '')) != 'mrp_estoque'
            THEN o.id END) as picking,
            
          (SELECT COUNT(*) 
@@ -24,7 +20,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN orders po ON po.id = pt.order_id
           WHERE po.trashed_at IS NULL
             AND (po.status IS NULL OR lower(po.status) NOT IN ('cancelado', 'finalizado'))
-            AND pt.tenant_id = $1::uuid
+            AND pt.tenant_id = '8add14d8-1c58-412d-bfe4-1f720c74bdba'::uuid
             AND pt.status <> 'DONE'
             AND NOT (
               lower(coalesce(po.status, '')) IN ('rascunho', 'draft')
@@ -32,16 +28,13 @@ export async function GET(request: NextRequest) {
             )
          ) as production
        FROM orders o
-       WHERE o.tenant_id = $1::uuid`,
-      [auth.tenantId]
-    );
-
-    return NextResponse.json({
-      orders: Number(res.rows[0]?.orders ?? 0),
-      picking: Number(res.rows[0]?.picking ?? 0),
-      production: Number(res.rows[0]?.production ?? 0),
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+       WHERE o.tenant_id = '8add14d8-1c58-412d-bfe4-1f720c74bdba'::uuid`;
+        const r1 = await query(q1);
+        console.log('QUERY 1:');
+        console.log(r1.rows.map(r => r['QUERY PLAN']).join('\n'));
+    } catch(err) {
+        console.error(err);
+    }
+    process.exit(0);
 }
+run();

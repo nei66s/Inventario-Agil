@@ -1,0 +1,53 @@
+[db] initialized postgres pool
+[db][pool:connect]
+[db][pool:acquire]
+[db] resetting current_tenant_id
+[perf][db] queryMs=594.31ms rows=0 textSummary=<raw>
+[db][pool:acquire]
+[perf][db] queryMs=138.59ms rows=0 textSummary=<raw>
+=== MATERIALS QUERY ===
+Hash Left Join  (cost=19.12..24.38 rows=4 width=344) (actual time=1.835..1.848 rows=4 loops=1)
+  Hash Cond: (m.id = pr_agg.material_id)
+  ->  Nested Loop Left Join  (cost=18.07..23.31 rows=4 width=280) (actual time=0.228..0.239 rows=4 loops=1)
+        Join Filter: (sb.material_id = m.id)
+        Rows Removed by Join Filter: 6
+        ->  Hash Right Join  (cost=18.07..22.06 rows=4 width=264) (actual time=0.183..0.190 rows=4 loops=1)
+              Hash Cond: (stock_reservations.material_id = m.id)
+              ->  HashAggregate  (cost=16.98..19.14 rows=144 width=20) (actual time=0.070..0.070 rows=0 loops=1)
+                    Group Key: stock_reservations.material_id
+                    Batches: 1  Memory Usage: 40kB
+                    ->  Index Scan using idx_stock_reservations_expires on stock_reservations  (cost=0.15..15.93 rows=210 width=20) (actual time=0.065..0.065 rows=0 loops=1)
+                          Index Cond: (expires_at > now())
+              ->  Hash  (cost=1.04..1.04 rows=4 width=248) (actual time=0.069..0.070 rows=4 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                    ->  Seq Scan on materials m  (cost=0.00..1.04 rows=4 width=248) (actual time=0.045..0.048 rows=4 loops=1)
+        ->  Materialize  (cost=0.00..1.06 rows=4 width=20) (actual time=0.009..0.010 rows=2 loops=4)
+              ->  Seq Scan on stock_balances sb  (cost=0.00..1.04 rows=4 width=20) (actual time=0.021..0.022 rows=4 loops=1)
+  ->  Hash  (cost=1.04..1.04 rows=1 width=20) (actual time=0.058..0.059 rows=1 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 9kB
+        ->  Subquery Scan on pr_agg  (cost=1.01..1.04 rows=1 width=20) (actual time=0.051..0.051 rows=1 loops=1)
+              ->  HashAggregate  (cost=1.01..1.03 rows=1 width=20) (actual time=0.050..0.050 rows=1 loops=1)
+                    Group Key: production_reservations.material_id
+                    Batches: 1  Memory Usage: 24kB
+                    ->  Seq Scan on production_reservations  (cost=0.00..1.01 rows=1 width=20) (actual time=0.020..0.020 rows=1 loops=1)
+Planning Time: 1.506 ms
+Execution Time: 2.200 ms
+
+=== ORDER ITEMS QUERY ===
+GroupAggregate  (cost=2.19..2.27 rows=2 width=109) (actual time=0.143..0.146 rows=0 loops=1)
+  Group Key: oi.material_id, oi.conditions
+  ->  Sort  (cost=2.19..2.19 rows=2 width=24) (actual time=0.142..0.144 rows=0 loops=1)
+        Sort Key: oi.material_id, oi.conditions
+        Sort Method: quicksort  Memory: 25kB
+        ->  Hash Join  (cost=1.06..2.18 rows=2 width=24) (actual time=0.119..0.121 rows=0 loops=1)
+              Hash Cond: (oi.order_id = o.id)
+              ->  Seq Scan on order_items oi  (cost=0.00..1.09 rows=6 width=28) (actual time=0.040..0.041 rows=1 loops=1)
+                    Filter: (COALESCE(conditions, '[]'::jsonb) <> '[]'::jsonb)
+                    Rows Removed by Filter: 7
+              ->  Hash  (cost=1.05..1.05 rows=1 width=4) (actual time=0.060..0.060 rows=2 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    ->  Seq Scan on orders o  (cost=0.00..1.05 rows=1 width=4) (actual time=0.053..0.054 rows=2 loops=1)
+                          Filter: (lower(status) <> ALL ('{finalizado,saida_concluida,cancelado}'::text[]))
+                          Rows Removed by Filter: 7
+Planning Time: 0.545 ms
+Execution Time: 0.219 ms

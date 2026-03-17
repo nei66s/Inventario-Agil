@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { query } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { Role } from '@/lib/domain/types';
+import { revalidateTag } from 'next/cache';
 
 const ROLES: Role[] = ['Admin', 'Manager', 'Seller', 'Input Operator', 'Production Operator', 'Picker'];
 
@@ -75,6 +76,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     values.push(targetId);
     values.push(auth.tenantId);
     await query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${values.length - 1} AND tenant_id = $${values.length}`, values);
+
+    revalidateTag(`user-${targetId}`);
 
     const updated = await query('SELECT id, name, email, role, avatar_url, is_blocked FROM users WHERE id = $1 AND tenant_id = $2', [targetId, auth.tenantId]);
     if (updated.rowCount === 0) {

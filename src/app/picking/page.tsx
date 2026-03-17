@@ -112,6 +112,8 @@ export default function PickingPage() {
 
   const queue = orders
     .filter((order) => ['EM_PICKING', 'ABERTO', 'SAIDA_CONCLUIDA'].includes(order.status))
+    .filter((order) => (order as any).source !== 'mrp_estoque')
+    .filter((order) => order.items.length > 0)
     .filter((order) => (filter === 'ALL' ? true : order.readiness === filter));
 
   const stockByMaterial = useMemo(() => {

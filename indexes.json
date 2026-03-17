@@ -1,0 +1,147 @@
+[db] initialized postgres pool
+[db][pool:connect]
+[db][pool:acquire]
+[db] resetting current_tenant_id
+[perf][db] queryMs=708.98ms rows=28 textSummary=<raw>
+[
+  {
+    "tablename": "inventory_adjustments",
+    "indexname": "inventory_adjustments_pkey",
+    "indexdef": "CREATE UNIQUE INDEX inventory_adjustments_pkey ON public.inventory_adjustments USING btree (id)"
+  },
+  {
+    "tablename": "inventory_adjustments",
+    "indexname": "idx_inventory_adjustments_created_at",
+    "indexdef": "CREATE INDEX idx_inventory_adjustments_created_at ON public.inventory_adjustments USING btree (created_at)"
+  },
+  {
+    "tablename": "inventory_adjustments",
+    "indexname": "idx_inventory_adjustments_material",
+    "indexdef": "CREATE INDEX idx_inventory_adjustments_material ON public.inventory_adjustments USING btree (material_id)"
+  },
+  {
+    "tablename": "inventory_adjustments",
+    "indexname": "idx_inventory_adjustments_tenant_id",
+    "indexdef": "CREATE INDEX idx_inventory_adjustments_tenant_id ON public.inventory_adjustments USING btree (tenant_id)"
+  },
+  {
+    "tablename": "materials",
+    "indexname": "materials_pkey",
+    "indexdef": "CREATE UNIQUE INDEX materials_pkey ON public.materials USING btree (id)"
+  },
+  {
+    "tablename": "materials",
+    "indexname": "materials_tenant_sku_key",
+    "indexdef": "CREATE UNIQUE INDEX materials_tenant_sku_key ON public.materials USING btree (tenant_id, sku)"
+  },
+  {
+    "tablename": "order_items",
+    "indexname": "order_items_pkey",
+    "indexdef": "CREATE UNIQUE INDEX order_items_pkey ON public.order_items USING btree (id)"
+  },
+  {
+    "tablename": "order_items",
+    "indexname": "idx_order_items_material_id",
+    "indexdef": "CREATE INDEX idx_order_items_material_id ON public.order_items USING btree (material_id)"
+  },
+  {
+    "tablename": "order_items",
+    "indexname": "idx_order_items_order_id",
+    "indexdef": "CREATE INDEX idx_order_items_order_id ON public.order_items USING btree (order_id)"
+  },
+  {
+    "tablename": "order_items",
+    "indexname": "idx_order_items_tenant_id",
+    "indexdef": "CREATE INDEX idx_order_items_tenant_id ON public.order_items USING btree (tenant_id)"
+  },
+  {
+    "tablename": "orders",
+    "indexname": "orders_pkey",
+    "indexdef": "CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)"
+  },
+  {
+    "tablename": "orders",
+    "indexname": "idx_orders_created_at",
+    "indexdef": "CREATE INDEX idx_orders_created_at ON public.orders USING btree (created_at)"
+  },
+  {
+    "tablename": "orders",
+    "indexname": "idx_orders_status",
+    "indexdef": "CREATE INDEX idx_orders_status ON public.orders USING btree (status)"
+  },
+  {
+    "tablename": "orders",
+    "indexname": "idx_orders_tenant_id",
+    "indexdef": "CREATE INDEX idx_orders_tenant_id ON public.orders USING btree (tenant_id)"
+  },
+  {
+    "tablename": "production_reservations",
+    "indexname": "production_reservations_pkey",
+    "indexdef": "CREATE UNIQUE INDEX production_reservations_pkey ON public.production_reservations USING btree (id)"
+  },
+  {
+    "tablename": "production_reservations",
+    "indexname": "production_reservations_unique_order_material",
+    "indexdef": "CREATE UNIQUE INDEX production_reservations_unique_order_material ON public.production_reservations USING btree (order_id, material_id)"
+  },
+  {
+    "tablename": "production_reservations",
+    "indexname": "idx_production_reservations_material_id",
+    "indexdef": "CREATE INDEX idx_production_reservations_material_id ON public.production_reservations USING btree (material_id)"
+  },
+  {
+    "tablename": "production_reservations",
+    "indexname": "idx_production_reservations_order_id",
+    "indexdef": "CREATE INDEX idx_production_reservations_order_id ON public.production_reservations USING btree (order_id)"
+  },
+  {
+    "tablename": "production_reservations",
+    "indexname": "idx_production_reservations_source",
+    "indexdef": "CREATE INDEX idx_production_reservations_source ON public.production_reservations USING btree (source)"
+  },
+  {
+    "tablename": "production_reservations",
+    "indexname": "idx_production_reservations_tenant_id",
+    "indexdef": "CREATE INDEX idx_production_reservations_tenant_id ON public.production_reservations USING btree (tenant_id)"
+  },
+  {
+    "tablename": "stock_balances",
+    "indexname": "stock_balances_material_id_key",
+    "indexdef": "CREATE UNIQUE INDEX stock_balances_material_id_key ON public.stock_balances USING btree (material_id)"
+  },
+  {
+    "tablename": "stock_balances",
+    "indexname": "stock_balances_pkey",
+    "indexdef": "CREATE UNIQUE INDEX stock_balances_pkey ON public.stock_balances USING btree (id)"
+  },
+  {
+    "tablename": "stock_balances",
+    "indexname": "idx_stock_balances_tenant_id",
+    "indexdef": "CREATE INDEX idx_stock_balances_tenant_id ON public.stock_balances USING btree (tenant_id)"
+  },
+  {
+    "tablename": "stock_reservations",
+    "indexname": "stock_reservations_order_id_material_id_key",
+    "indexdef": "CREATE UNIQUE INDEX stock_reservations_order_id_material_id_key ON public.stock_reservations USING btree (order_id, material_id)"
+  },
+  {
+    "tablename": "stock_reservations",
+    "indexname": "stock_reservations_pkey",
+    "indexdef": "CREATE UNIQUE INDEX stock_reservations_pkey ON public.stock_reservations USING btree (id)"
+  },
+  {
+    "tablename": "stock_reservations",
+    "indexname": "idx_stock_reservations_expires",
+    "indexdef": "CREATE INDEX idx_stock_reservations_expires ON public.stock_reservations USING btree (expires_at)"
+  },
+  {
+    "tablename": "stock_reservations",
+    "indexname": "idx_stock_reservations_material",
+    "indexdef": "CREATE INDEX idx_stock_reservations_material ON public.stock_reservations USING btree (material_id)"
+  },
+  {
+    "tablename": "stock_reservations",
+    "indexname": "idx_stock_reservations_tenant_id",
+    "indexdef": "CREATE INDEX idx_stock_reservations_tenant_id ON public.stock_reservations USING btree (tenant_id)"
+  }
+]
