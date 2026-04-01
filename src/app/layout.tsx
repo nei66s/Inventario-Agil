@@ -100,17 +100,11 @@ export default function RootLayout({
                 try {
                   const stored = readStorage();
                   const cookie = readCookie();
-                  const prefersDark =
-                    typeof window !== 'undefined' &&
-                    window.matchMedia &&
-                    window.matchMedia('(prefers-color-scheme: dark)').matches;
                   const theme = isTheme(stored)
                     ? stored
                     : isTheme(cookie)
                       ? cookie
-                      : prefersDark
-                        ? 'dark'
-                        : 'light';
+                      : 'light';
 
                   const root = document.documentElement;
                   root.classList.toggle('dark', theme === 'dark');

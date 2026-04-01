@@ -11,12 +11,7 @@ export function useTheme() {
   React.useEffect(() => {
     setMounted(true);
     const saved = window.localStorage.getItem('theme');
-    const initialTheme =
-      saved === 'dark' || saved === 'light'
-        ? (saved as Theme)
-        : window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light';
+    const initialTheme = saved === 'dark' || saved === 'light' ? (saved as Theme) : 'light';
 
     setTheme(initialTheme);
   }, []);
