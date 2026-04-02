@@ -102,13 +102,20 @@ export function useRealtime() {
                 ws.onmessage = (event) => {
                     console.log("[realtime] 📩 Message received:", event.data);
 
+                    let shouldRefresh = true;
+
                     try {
                         const data = JSON.parse(event.data);
                         if (data.event === 'NOTIFICATION_CREATED') {
                             if (!isMutedRef.current) playNotificationSound();
                             notifyNotification();
+                            shouldRefresh = false;
                         }
                     } catch { /* ignore non-json or malformed */ }
+
+                    if (!shouldRefresh) {
+                        return;
+                    }
 
                     if (document.visibilityState === "visible") {
                         if (refreshTimeout) clearTimeout(refreshTimeout);

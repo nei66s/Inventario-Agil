@@ -52,10 +52,12 @@ function errorMessage(err: unknown): string {
 function EditableInput({
   value,
   onSave,
+  onChangeClient,
   ...props
 }: React.ComponentProps<typeof Input> & {
   value: string;
   onSave: (val: string) => void;
+  onChangeClient?: (val: string) => void;
 }) {
   const [localValue, setLocalValue] = React.useState(value);
   const [isFocused, setIsFocused] = React.useState(false);
@@ -78,6 +80,7 @@ function EditableInput({
       }}
       onChange={(e) => {
         setLocalValue(e.target.value);
+        onChangeClient?.(e.target.value);
         props.onChange?.(e);
       }}
       onBlur={(e) => {
@@ -96,6 +99,9 @@ type LoadTasksOptions = {
 };
 
 export default function ProductionPage() {
+  const pendingTaskDraftsRef = React.useRef<Record<string, Partial<Pick<ProductionTask, 'producedQty' | 'producedWeight'>>>>({});
+  const loadTasksRequestRef = React.useRef(0);
+  const appliedLoadTasksRequestRef = React.useRef(0);
   const [serverTasks, setServerTasks] = React.useState<ProductionTask[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -104,7 +110,29 @@ export default function ProductionPage() {
   const [showHistory, setShowHistory] = React.useState(false);
   const tasksFingerprintRef = React.useRef('');
 
+  const pruneTaskDraft = React.useCallback((task: ProductionTask) => {
+    const draft = pendingTaskDraftsRef.current[task.id];
+    if (!draft) return;
+
+    const nextDraft = { ...draft };
+    if (draft.producedQty === task.producedQty) delete nextDraft.producedQty;
+    if (draft.producedWeight === task.producedWeight) delete nextDraft.producedWeight;
+
+    if (Object.keys(nextDraft).length === 0) {
+      delete pendingTaskDraftsRef.current[task.id];
+      return;
+    }
+
+    pendingTaskDraftsRef.current[task.id] = nextDraft;
+  }, []);
+
+  const applyTaskDraft = React.useCallback((task: ProductionTask): ProductionTask => {
+    const draft = pendingTaskDraftsRef.current[task.id];
+    return draft ? { ...task, ...draft } : task;
+  }, []);
+
   const loadTasks = React.useCallback(async (opts?: LoadTasksOptions) => {
+    const requestId = ++loadTasksRequestRef.current;
     const skipLoading = opts?.skipLoading;
     if (!skipLoading) {
       setLoading(true);
@@ -115,11 +143,19 @@ export default function ProductionPage() {
       const res = await fetch('/api/production', { cache: 'no-store' });
       if (!res.ok) throw new Error(`Erro HTTP ${res.status}`);
       const data = (await res.json()) as unknown;
-      const items = Array.isArray(data) ? data : [];
-      const nextFingerprint = JSON.stringify(items);
+      if (requestId < appliedLoadTasksRequestRef.current) {
+        return;
+      }
+      appliedLoadTasksRequestRef.current = requestId;
+      const items = (Array.isArray(data) ? data : []) as ProductionTask[];
+      const mergedItems = items.map((task) => {
+        pruneTaskDraft(task);
+        return applyTaskDraft(task);
+      });
+      const nextFingerprint = JSON.stringify(mergedItems);
       if (nextFingerprint !== tasksFingerprintRef.current) {
         tasksFingerprintRef.current = nextFingerprint;
-        setServerTasks(items);
+        setServerTasks(mergedItems);
         refreshed = true;
       } else {
         refreshed = false;
@@ -136,7 +172,7 @@ export default function ProductionPage() {
         notifyDataRefreshed();
       }
     }
-  }, []);
+  }, [applyTaskDraft, pruneTaskDraft]);
 
   React.useEffect(() => {
     loadTasks();
@@ -145,6 +181,10 @@ export default function ProductionPage() {
   }, [loadTasks]);
 
   const updateTaskLocal = (taskId: string, field: 'producedQty' | 'producedWeight', value: number | undefined) => {
+    pendingTaskDraftsRef.current[taskId] = {
+      ...(pendingTaskDraftsRef.current[taskId] ?? {}),
+      [field]: value,
+    };
     setServerTasks((prev) => prev.map((task) => (task.id === taskId ? { ...task, [field]: value } : task)));
   };
 
@@ -335,6 +375,10 @@ export default function ProductionPage() {
               className="h-8 text-center"
               value={String(task.producedQty ?? '')}
               placeholder="Qtd."
+              onChangeClient={(value) => {
+                const nextQty = value === '' ? undefined : Number(value);
+                updateTaskLocal(task.id, 'producedQty', Number.isFinite(nextQty as number) ? nextQty : undefined);
+              }}
               onSave={(value) => {
                 const nextQty = value === '' ? undefined : Number(value);
                 updateTaskLocal(task.id, 'producedQty', nextQty);
@@ -353,6 +397,10 @@ export default function ProductionPage() {
               className="h-8 text-center"
               value={String(task.producedWeight ?? '')}
               placeholder="Peso"
+              onChangeClient={(value) => {
+                const nextWeight = value === '' ? undefined : Number(value);
+                updateTaskLocal(task.id, 'producedWeight', Number.isFinite(nextWeight as number) ? nextWeight : undefined);
+              }}
               onSave={(value) => {
                 const nextWeight = value === '' ? undefined : Number(value);
                 updateTaskLocal(task.id, 'producedWeight', nextWeight);
@@ -444,6 +492,10 @@ export default function ProductionPage() {
                 className="h-9 px-2 text-center text-xs font-bold"
                 value={String(task.producedQty ?? '')}
                 placeholder="Qtd."
+                onChangeClient={(value) => {
+                  const nextQty = value === '' ? undefined : Number(value);
+                  updateTaskLocal(task.id, 'producedQty', Number.isFinite(nextQty as number) ? nextQty : undefined);
+                }}
                 onSave={(value) => {
                   const nextQty = value === '' ? undefined : Number(value);
                   updateTaskLocal(task.id, 'producedQty', nextQty);
@@ -458,6 +510,10 @@ export default function ProductionPage() {
                 className="h-9 px-2 text-center text-xs font-bold"
                 value={String(task.producedWeight ?? '')}
                 placeholder="Peso"
+                onChangeClient={(value) => {
+                  const nextWeight = value === '' ? undefined : Number(value);
+                  updateTaskLocal(task.id, 'producedWeight', Number.isFinite(nextWeight as number) ? nextWeight : undefined);
+                }}
                 onSave={(value) => {
                   const nextWeight = value === '' ? undefined : Number(value);
                   updateTaskLocal(task.id, 'producedWeight', nextWeight);

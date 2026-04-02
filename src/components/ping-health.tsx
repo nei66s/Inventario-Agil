@@ -27,6 +27,13 @@ let lastPingCheck = 0;
 export default function PingHealth() {
   const [status, setStatus] = React.useState<Status>(globalPingStatus);
   const [latency, setLatency] = React.useState<number | null>(globalLatency);
+  const statusRef = React.useRef(status);
+  const latencyRef = React.useRef(latency);
+
+  React.useEffect(() => {
+    statusRef.current = status;
+    latencyRef.current = latency;
+  }, [status, latency]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -35,8 +42,8 @@ export default function PingHealth() {
       const start = Date.now();
       if (!force && lastPingCheck > 0 && start - lastPingCheck < 120000) {
         if (mounted) {
-          if (status !== globalPingStatus) setStatus(globalPingStatus);
-          if (latency !== globalLatency) setLatency(globalLatency);
+          if (statusRef.current !== globalPingStatus) setStatus(globalPingStatus);
+          if (latencyRef.current !== globalLatency) setLatency(globalLatency);
         }
         return;
       }
@@ -69,7 +76,7 @@ export default function PingHealth() {
       mounted = false;
       window.clearInterval(id);
     };
-  }, [status, latency]);
+  }, []);
 
   const cfg = statusConfig[status];
   const Icon = status === 'disconnected' ? WifiOff : status === 'loading' ? Loader2 : Wifi;

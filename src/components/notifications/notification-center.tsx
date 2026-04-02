@@ -39,17 +39,21 @@ export function NotificationCenter() {
   type UiNotification = Notification & { _removing?: boolean };
 
   const [items, setItems] = React.useState<UiNotification[]>(globalItems);
+  const itemsRef = React.useRef<UiNotification[]>(globalItems);
   const unreadCount = items.filter((it) => !it.readAt).length;
   const { lastNotificationAt, isMuted, setIsMuted } = useRealtimeStore();
 
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
+  React.useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const loadNotifications = React.useCallback(async (force = false) => {
     const now = Date.now();
     // Use cache if within 30s AND no new realtime push event has occurred since last fetch
     if (!force && lastItemsFetch > 0 && now - lastItemsFetch < 30000 && lastNotificationAt <= lastItemsFetch) {
-        if (JSON.stringify(globalItems) !== JSON.stringify(items)) setItems(globalItems);
+        if (JSON.stringify(globalItems) !== JSON.stringify(itemsRef.current)) setItems(globalItems);
         return;
     }
     try {
@@ -65,7 +69,7 @@ export function NotificationCenter() {
     } catch (err) {
       console.error('notifications fetch failed', err);
     }
-  }, [items, lastNotificationAt]);
+  }, [lastNotificationAt]);
 
   React.useEffect(() => {
     loadNotifications();

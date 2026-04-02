@@ -5,6 +5,7 @@ import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboard
 import { logActivity } from '@/lib/log-activity'
 import { publishRealtimeEvent } from '@/lib/pubsub'
 import { normalizeTenantOperationMode } from '@/features/tenant-operation-mode/helpers'
+import { nextManualOrderNumber } from '@/lib/concurrency'
 
 type ApiOrder = {
   id: string
@@ -122,21 +123,6 @@ function computeReadiness(items: ApiOrder['items']) {
   if (totalReserved <= 0) return 'NOT_READY'
   if (totalReserved >= totalRequested) return 'READY_FULL'
   return 'READY_PARTIAL'
-}
-
-async function generateManualOrderNumber(createdIso: string, tenantId: string) {
-  const dateStr = formatBrazilianDate(createdIso)
-  const dayKey = dateStr.replace(/-/g, '')
-  const counter = await query<{ last_seq: number }>(
-    `INSERT INTO order_number_counters (day, last_seq, tenant_id)
-     VALUES ($1::date, 1, $2::uuid)
-     ON CONFLICT (tenant_id, day) DO UPDATE
-       SET last_seq = order_number_counters.last_seq + 1
-     RETURNING last_seq`,
-    [dateStr, tenantId]
-  )
-  const seq = Number(counter.rows[0]?.last_seq ?? 0)
-  return `${dayKey}${String(seq).padStart(2, '0')}`
 }
 
 const perfEnabled = process.env.NODE_ENV !== 'production' || process.env.DEBUG_PERF === 'true'
@@ -344,7 +330,13 @@ export async function POST(request: NextRequest) {
     if (source === 'mrp') {
       orderNumber = `MRP-${orderId}`
     } else {
-      orderNumber = await generateManualOrderNumber(createdIso, auth.tenantId)
+      orderNumber = await nextManualOrderNumber(
+        {
+          query: (text, params) => query(text as any, params as any),
+        } as { query: typeof query },
+        auth.tenantId,
+        createdIso
+      )
     }
     await query('UPDATE orders SET order_number = $1 WHERE id = $2', [orderNumber, orderId])
 

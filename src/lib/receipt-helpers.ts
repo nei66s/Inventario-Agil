@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg'
 import { RESERVATION_TTL_MS } from '@/lib/domain/types'
+import { lockMaterialMutations } from '@/lib/concurrency'
 
 type DbClient = Pool | PoolClient
 
@@ -21,6 +22,7 @@ export async function allocateToOrders(
   tenantId: string
 ) {
   if (qtyAvailable <= 0) return
+  await lockMaterialMutations(client as PoolClient, tenantId, [materialId])
   const itemsRes = await client.query<{
     id: number
     order_id: number
@@ -127,6 +129,7 @@ export async function postReceipt(
   for (const item of itemsRes.rows) {
     const qty = Number(item.qty ?? 0)
     if (qty <= 0) continue
+    await lockMaterialMutations(client as PoolClient, tenantId, [item.material_id])
     const upd = await client.query(
       `UPDATE stock_balances SET on_hand = COALESCE(on_hand,0) + $2, updated_at = now()
        WHERE material_id = $1 AND tenant_id = $3 RETURNING id`,

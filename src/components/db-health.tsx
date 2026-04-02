@@ -27,6 +27,13 @@ let lastDbCheck = 0;
 export default function DbHealth() {
   const [status, setStatus] = React.useState<Status>(globalDbStatus);
   const [latency, setLatency] = React.useState<number | null>(globalDbLatency);
+  const statusRef = React.useRef(status);
+  const latencyRef = React.useRef(latency);
+
+  React.useEffect(() => {
+    statusRef.current = status;
+    latencyRef.current = latency;
+  }, [status, latency]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -35,8 +42,8 @@ export default function DbHealth() {
       const start = Date.now();
       if (!force && lastDbCheck > 0 && start - lastDbCheck < 120000) {
         if (mounted) {
-          if (status !== globalDbStatus) setStatus(globalDbStatus);
-          if (latency !== globalDbLatency) setLatency(globalDbLatency);
+          if (statusRef.current !== globalDbStatus) setStatus(globalDbStatus);
+          if (latencyRef.current !== globalDbLatency) setLatency(globalDbLatency);
         }
         return;
       }
@@ -69,7 +76,7 @@ export default function DbHealth() {
       mounted = false;
       window.clearInterval(id);
     };
-  }, [status, latency]);
+  }, []);
 
   const cfg = statusConfig[status];
 

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import { isUnauthorizedError, requireAuth } from '@/lib/auth'
-import { notifyOrderCompleted } from '@/lib/notifications'
+import { notifyAllocationAvailable, notifyOrderCompleted, notifyOrderStage, notifyProductionTaskCreated } from '@/lib/notifications'
 import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
 import { refreshMaterialsSnapshot } from '@/lib/repository/materials'
 import { logActivity } from '@/lib/log-activity'
 import { publishRealtimeEvent } from '@/lib/pubsub'
 import { normalizeTenantOperationMode } from '@/features/tenant-operation-mode/helpers'
 import { getOrderOperationModeWithClient } from '@/features/tenant-operation-mode/server'
+import { lockMaterialMutations, lockOrderMutation } from '@/lib/concurrency'
 
 type RouteParams = { id: string }
 
@@ -162,6 +163,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       // O pool.query faz isso automaticamente, mas client.connect() não.
       await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(auth.tenantId)}`)
       await client.query('BEGIN')
+      await lockOrderMutation(client, auth.tenantId, orderId)
 
       const statusRes = await client.query('SELECT status, operation_mode FROM orders WHERE id = $1', [orderId])
       const currentStatus = statusRes.rows[0]?.status
@@ -212,6 +214,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await client.query('ROLLBACK')
           return NextResponse.json({ error: 'materialId invalido' }, { status: 400 })
         }
+        await lockMaterialMutations(client, auth.tenantId, [materialId])
         const descRes = await client.query(
           'SELECT description FROM materials WHERE id = $1',
           [materialId]
@@ -232,6 +235,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           'SELECT material_id FROM order_items WHERE id = $1 AND order_id = $2',
           [itemId, orderId]
         )
+        await lockMaterialMutations(client, auth.tenantId, [Number(itemRes.rows[0]?.material_id ?? 0)])
         await client.query('DELETE FROM order_items WHERE id = $1 AND order_id = $2', [itemId, orderId])
         if (itemRes.rowCount > 0) {
           const materialId = Number(itemRes.rows[0].material_id)
@@ -245,6 +249,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await client.query('ROLLBACK')
           return NextResponse.json({ error: 'itemId invalido' }, { status: 400 })
         }
+        const itemRes = await client.query(
+          'SELECT material_id FROM order_items WHERE id = $1 AND order_id = $2',
+          [itemId, orderId]
+        )
+        await lockMaterialMutations(client, auth.tenantId, [Number(itemRes.rows[0]?.material_id ?? 0)])
         const updates: string[] = []
         const values: unknown[] = []
         if (body.qtyRequested !== undefined) {
@@ -319,6 +328,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           await client.query('ROLLBACK')
           return NextResponse.json({ error: 'itemId invalido' }, { status: 400 })
         }
+        const itemRes = await client.query(
+          'SELECT material_id FROM order_items WHERE id = $1 AND order_id = $2',
+          [itemId, orderId]
+        )
+        await lockMaterialMutations(client, auth.tenantId, [Number(itemRes.rows[0]?.material_id ?? 0)])
         if (body.qtyRequested !== undefined) {
           await client.query(
             'UPDATE order_items SET quantity = $3 WHERE id = $1 AND order_id = $2',
@@ -370,6 +384,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         }
       } else if (action === 'complete_picking') {
         const operationMode = await getOrderOperationModeWithClient(client, orderId)
+        const items = await client.query(
+          'SELECT id, material_id, qty_separated, qty_reserved_from_stock, quantity, separated_weight FROM order_items WHERE order_id = $1',
+          [orderId]
+        )
+        await lockMaterialMutations(
+          client,
+          auth.tenantId,
+          items.rows.map((item) => Number(item.material_id))
+        )
         if (operationMode === 'WEIGHT') {
           await client.query(
             `UPDATE order_items
@@ -380,11 +403,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             [orderId]
           )
         }
-
-        const items = await client.query(
-          'SELECT id, material_id, qty_separated, qty_reserved_from_stock, quantity, separated_weight FROM order_items WHERE order_id = $1',
-          [orderId]
-        )
 
         for (const item of items.rows) {
           const qtySeparated = Math.max(0, Number(item.qty_separated ?? 0))
@@ -502,6 +520,88 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
            WHERE id = $1`,
           values
         )
+
+        const orderMetaRes = await client.query(
+          'SELECT order_number, created_by FROM orders WHERE id = $1',
+          [orderId]
+        )
+        const orderNumber = orderMetaRes.rows[0]?.order_number ?? null
+        const orderCreatorId = orderMetaRes.rows[0]?.created_by ?? null
+
+        const orderItemsRes = await client.query(
+          `SELECT oi.material_id, oi.qty_reserved_from_stock, oi.qty_to_produce, m.name AS material_name
+           FROM order_items oi
+           LEFT JOIN materials m ON m.id = oi.material_id
+           WHERE oi.order_id = $1`,
+          [orderId]
+        )
+
+        let hasPendingProduction = false
+        let hasPickingAllocation = false
+
+        for (const row of orderItemsRes.rows as {
+          material_id: number
+          qty_reserved_from_stock: string | number | null
+          qty_to_produce: string | number | null
+          material_name: string | null
+        }[]) {
+          const materialId = Number(row.material_id ?? 0)
+          const qtyReserved = Number(row.qty_reserved_from_stock ?? 0)
+          const qtyToProduce = Number(row.qty_to_produce ?? 0)
+          const materialName = row.material_name ?? `M-${materialId}`
+
+          if (qtyToProduce > 0) {
+            hasPendingProduction = true
+            await notifyProductionTaskCreated(
+              {
+                orderId,
+                materialId,
+                orderNumber,
+                materialName,
+                qty: qtyToProduce,
+              },
+              client
+            )
+          }
+
+          if (qtyReserved > 0) {
+            hasPickingAllocation = true
+            await notifyAllocationAvailable(
+              {
+                orderId,
+                materialId,
+                orderNumber,
+                materialName,
+                qty: qtyReserved,
+              },
+              client
+            )
+          }
+        }
+
+        if (hasPendingProduction) {
+          await notifyOrderStage(
+            {
+              orderId,
+              orderNumber,
+              stage: 'PRODUCAO_INICIADA',
+              userTarget: orderCreatorId,
+              detail: `Pedido ${orderNumber ?? `O-${orderId}`} iniciou fluxo de producao.`,
+            },
+            client
+          )
+        } else if (hasPickingAllocation) {
+          await notifyOrderStage(
+            {
+              orderId,
+              orderNumber,
+              stage: 'PRODUCAO_RESERVADA',
+              userTarget: orderCreatorId,
+              detail: `Pedido ${orderNumber ?? `O-${orderId}`} foi liberado direto para separacao.`,
+            },
+            client
+          )
+        }
       } else if (action === 'restore') {
         await client.query('UPDATE orders SET trashed_at = NULL WHERE id = $1', [orderId])
       } else {
@@ -543,10 +643,55 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<RouteParams> }) {
   try {
-    await requireAuth(request)
+    const auth = await requireAuth(request)
     const resolvedParams = await params
     const orderId = parseOrderId(resolvedParams.id)
     if (Number.isNaN(orderId)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+
+    {
+      const client = await getPool().connect()
+      try {
+        await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(auth.tenantId)}`)
+        await client.query('BEGIN')
+        await lockOrderMutation(client, auth.tenantId, orderId)
+
+        const statusRes = await client.query('SELECT status FROM orders WHERE id = $1 AND tenant_id = $2', [orderId, auth.tenantId])
+        const currentStatus = statusRes.rows[0]?.status
+        if (currentStatus === 'FINALIZADO' || currentStatus === 'SAIDA_CONCLUIDA') {
+          await client.query('ROLLBACK')
+          return NextResponse.json({ error: 'Pedido finalizado nÃ£o pode ser excluÃ­do' }, { status: 400 })
+        }
+
+        const materialsRes = await client.query(
+          'SELECT material_id FROM order_items WHERE order_id = $1 AND tenant_id = $2',
+          [orderId, auth.tenantId]
+        )
+        await lockMaterialMutations(
+          client,
+          auth.tenantId,
+          materialsRes.rows.map((row) => Number(row.material_id))
+        )
+
+        await client.query('DELETE FROM order_items WHERE order_id = $1 AND tenant_id = $2', [orderId, auth.tenantId])
+        await client.query('DELETE FROM orders WHERE id = $1 AND tenant_id = $2', [orderId, auth.tenantId])
+        await client.query('COMMIT')
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw err
+      } finally {
+        client.release()
+      }
+    }
+
+    // Background refresh
+    await invalidateDashboardCache()
+    await refreshDashboardSnapshot(false)
+    revalidateDashboardTag()
+    await refreshMaterialsSnapshot()
+
+    await publishRealtimeEvent('ORDER_DELETED', { orderId })
+
+    return NextResponse.json({ ok: true })
 
     const statusRes = await getPool().query('SELECT status FROM orders WHERE id = $1', [orderId])
     const currentStatus = statusRes.rows[0]?.status

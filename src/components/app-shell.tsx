@@ -505,9 +505,7 @@ function AppShellContent({ children, initialUser }: { children: React.ReactNode,
     const fetchBadges = async (force = false) => {
       const now = Date.now();
       if (!force && lastBadgesFetch > 0 && now - lastBadgesFetch < 30000) {
-        if (JSON.stringify(globalBadgesCache) !== JSON.stringify(badges)) {
-            setBadges(globalBadgesCache);
-        }
+        setBadges(globalBadgesCache);
         return;
       }
       try {
@@ -520,10 +518,18 @@ function AppShellContent({ children, initialUser }: { children: React.ReactNode,
         }
       } catch { }
     };
+    const handleDataRefresh = () => {
+      fetchBadges(true);
+    };
+
     fetchBadges();
     const interval = setInterval(() => fetchBadges(true), 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, [authUser, badges]);
+    window.addEventListener('app:data-refreshed', handleDataRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('app:data-refreshed', handleDataRefresh);
+    };
+  }, [authUser]);
 
   const displayUser = authUser ?? null;
   const displayRoleLabel = displayUser ? roleLabel(displayUser.role) : '---';

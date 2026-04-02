@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+import { getPool, query } from '@/lib/db'
 import { requireAuth } from '@/lib/auth'
 import { notifyProductionTaskCreated } from '@/lib/notifications'
 import { publishRealtimeEvent } from '@/lib/pubsub'
 import { revalidateDashboardTag } from '@/lib/repository/dashboard'
 import { refreshMaterialsSnapshot } from '@/lib/repository/materials'
+import { lockMaterialMutations, lockOrderMutation } from '@/lib/concurrency'
 
 type DbRow = {
   id: number
@@ -126,69 +127,79 @@ export async function POST(request: NextRequest) {
     if (Number.isNaN(qtyToProduce) || qtyToProduce <= 0) errors.qtyToProduce = 'qtyToProduce deve ser maior que zero'
     if (Object.keys(errors).length > 0) return NextResponse.json({ errors }, { status: 400 })
 
-    const res = await query(
-      `INSERT INTO production_tasks (order_id, material_id, qty_to_produce, status, tenant_id)
-       VALUES ($1, $2, $3, 'PENDING', $4)
-       ON CONFLICT (order_id, material_id)
-       DO UPDATE SET
-         qty_to_produce = EXCLUDED.qty_to_produce,
-         status = CASE
-           WHEN production_tasks.status = 'DONE' THEN production_tasks.status
-           ELSE 'PENDING'
-         END,
-         updated_at = now()
-       RETURNING id, order_id, material_id, qty_to_produce, status, produced_qty, produced_weight, label_printed, created_at, updated_at,
-         (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
-         (SELECT operation_mode FROM orders WHERE id = production_tasks.order_id) AS order_operation_mode,
-         (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
-        (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name,
-        (SELECT color FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS color,
-        (SELECT item_description FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS description,
-        (SELECT conditions FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS conditions,
-        (SELECT requested_weight FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS requested_weight`,
-      [orderId, materialId, qtyToProduce, auth.tenantId]
-    )
-    const createdRow = res.rows[0] as DbRow
-
+    const client = await getPool().connect()
+    let createdRow: DbRow
     try {
-      const orderSrcRes = await query<{ source: string }>('SELECT source FROM orders WHERE id = $1', [createdRow.order_id])
-      const orderSource = String(orderSrcRes.rows[0]?.source ?? '').toLowerCase()
+      await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(auth.tenantId)}`)
+      await client.query('BEGIN')
+      await lockOrderMutation(client, auth.tenantId, orderId)
+      await lockMaterialMutations(client, auth.tenantId, [materialId])
+
+      const res = await client.query(
+        `INSERT INTO production_tasks (order_id, material_id, qty_to_produce, status, tenant_id)
+         VALUES ($1, $2, $3, 'PENDING', $4)
+         ON CONFLICT (order_id, material_id)
+         DO UPDATE SET
+           qty_to_produce = EXCLUDED.qty_to_produce,
+           status = CASE
+             WHEN production_tasks.status = 'DONE' THEN production_tasks.status
+             ELSE 'PENDING'
+           END,
+           updated_at = now()
+         RETURNING id, order_id, material_id, qty_to_produce, status, produced_qty, produced_weight, label_printed, created_at, updated_at,
+           (SELECT order_number FROM orders WHERE id = production_tasks.order_id) AS order_number,
+           (SELECT operation_mode FROM orders WHERE id = production_tasks.order_id) AS order_operation_mode,
+           (SELECT source FROM orders WHERE id = production_tasks.order_id) AS order_source,
+          (SELECT name FROM materials WHERE id = production_tasks.material_id) AS material_name,
+          (SELECT color FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS color,
+          (SELECT item_description FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS description,
+          (SELECT conditions FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS conditions,
+          (SELECT requested_weight FROM order_items WHERE order_id = production_tasks.order_id AND material_id = production_tasks.material_id LIMIT 1) AS requested_weight`,
+        [orderId, materialId, qtyToProduce, auth.tenantId]
+      )
+      createdRow = res.rows[0] as DbRow
+
+      const orderSource = String(createdRow.order_source ?? '').toLowerCase()
       const resultingQty = Number(createdRow.qty_to_produce ?? 0)
       if (orderSource === 'mrp' && resultingQty > 0) {
-        const existing = await query('SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1', [createdRow.order_id, createdRow.material_id])
+        const existing = await client.query(
+          'SELECT id FROM order_items WHERE order_id = $1 AND material_id = $2 LIMIT 1',
+          [createdRow.order_id, createdRow.material_id]
+        )
         if (existing.rowCount > 0) {
-          await query(
+          await client.query(
             'UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description) WHERE order_id = $1 AND material_id = $2',
             [createdRow.order_id, createdRow.material_id, resultingQty, createdRow.description ?? null]
           )
         } else {
-          await query(
+          await client.query(
             `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description, tenant_id)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
             [createdRow.order_id, createdRow.material_id, resultingQty, 0, '', 'PRODUCE', createdRow.description ?? null, auth.tenantId]
           )
         }
       }
-    } catch (e) {
-      console.error('upsert order_items for production task error', e)
-    }
 
-    try {
       if (Number(createdRow.qty_to_produce ?? 0) > 0) {
-        await query(
+        await client.query(
           `INSERT INTO production_reservations (order_id, material_id, qty, tenant_id)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (order_id, material_id) DO UPDATE SET qty = EXCLUDED.qty, updated_at = now()`,
           [orderId, materialId, Number(createdRow.qty_to_produce ?? 0), auth.tenantId]
         )
       } else {
-        await query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [orderId, materialId])
+        await client.query(`DELETE FROM production_reservations WHERE order_id = $1 AND material_id = $2`, [orderId, materialId])
       }
+
+      await client.query('COMMIT')
     } catch (e) {
-      console.error('production reservation upsert error', e)
+      await client.query('ROLLBACK').catch(() => {})
+      throw e
+    } finally {
+      client.release()
     }
 
-    const createdQty = Number(res.rows[0].qty_to_produce ?? 0)
+    const createdQty = Number(createdRow.qty_to_produce ?? 0)
     if (createdQty > 0) {
       await notifyProductionTaskCreated({
         orderId,

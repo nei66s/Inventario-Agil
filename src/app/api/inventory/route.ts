@@ -4,6 +4,7 @@ import { getPool } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard';
 import { publishRealtimeEvent } from '@/lib/pubsub';
+import { lockMaterialMutations } from '@/lib/concurrency';
 
 export async function GET() {
   try {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
         await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(auth.tenantId)}`)
       }
       await client.query('BEGIN');
+      await lockMaterialMutations(client, auth.tenantId, [mid]);
 
       // Get current qty
       const currentRes = await client.query('SELECT on_hand FROM stock_balances WHERE material_id = $1 AND tenant_id = $2', [mid, auth.tenantId]);

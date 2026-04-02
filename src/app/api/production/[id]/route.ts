@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth'
 import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
 import { refreshMaterialsSnapshot } from '@/lib/repository/materials'
 import { publishRealtimeEvent } from '@/lib/pubsub'
+import { lockMaterialMutations } from '@/lib/concurrency'
 
 type DbRow = {
   id: number
@@ -149,6 +150,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           qtyProduced = Number(pickRow?.qty_to_produce ?? 0);
         }
         const materialId = Number(pickRow?.material_id ?? 0);
+        await lockMaterialMutations(client, auth.tenantId, [materialId])
 
         const upd = await client.query(
           `UPDATE production_tasks
@@ -202,17 +204,32 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           );
           await postReceipt(client, receiptId, {
             postedBy: null,
-            autoAllocate: true,
+            autoAllocate: false,
             productionOrderId: orderId,
             tenantId: auth.tenantId,
           });
+          const itemSyncRes = await client.query(
+            `UPDATE order_items
+             SET
+               qty_reserved_from_stock = LEAST(
+                 quantity,
+                 GREATEST(0, COALESCE(qty_reserved_from_stock, 0) + $3)
+               ),
+               qty_to_produce = GREATEST(0, COALESCE(qty_to_produce, 0) - $3)
+             WHERE order_id = $1
+               AND material_id = $2
+               AND tenant_id = $4
+             RETURNING qty_reserved_from_stock`,
+            [orderId, materialId, qtyProduced, auth.tenantId]
+          );
+          const syncedReservedQty = Number(itemSyncRes.rows[0]?.qty_reserved_from_stock ?? 0);
           const expiresAt = new Date(Date.now() + RESERVATION_TTL_MS).toISOString();
           await client.query(
             `INSERT INTO stock_reservations (order_id, material_id, user_id, qty, expires_at, tenant_id, created_at, updated_at)
              VALUES ($1,$2,$3,$4,$5,$6,now(),now())
              ON CONFLICT (order_id, material_id)
              DO UPDATE SET qty = EXCLUDED.qty, user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at, updated_at = now()`,
-            [orderId, materialId, null, qtyProduced, expiresAt, auth.tenantId]
+            [orderId, materialId, null, syncedReservedQty, expiresAt, auth.tenantId]
           );
           await notifyAllocationAvailable(
             {

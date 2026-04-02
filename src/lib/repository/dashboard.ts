@@ -202,6 +202,7 @@ const MATERIALIZED_VIEWS = [
   'mv_inventory_receipts_snapshot',
 ]
 let bypassRedisCache = false
+const bypassRedisCacheTenants = new Set<string>()
 
 async function loadOrders(tenantId: string): Promise<LoadResult<{ items: Order[] }>> {
 
@@ -560,8 +561,11 @@ function logDashboardSnapshotQueryProfile(queryProfiles: QueryProfileEntry[], to
 async function loadDashboardSnapshot(tenantId: string): Promise<DashboardData> {
   const tenantCacheKey = `${DASHBOARD_CACHE_KEY}:${tenantId}`
 
-  const skipCache = bypassRedisCache
+  const skipCache = bypassRedisCache || bypassRedisCacheTenants.has(tenantId)
   bypassRedisCache = false
+  if (skipCache) {
+    bypassRedisCacheTenants.delete(tenantId)
+  }
   if (!skipCache) {
     const cached = await getJsonCache<DashboardData>(tenantCacheKey)
     if (cached) return cached
@@ -601,6 +605,7 @@ export async function invalidateDashboardCache() {
 
 let pendingMaterializedRefresh: Promise<void> | null = null
 let lastMaterializedRefreshAt = 0
+const pendingRefreshTenants = new Set<string>()
 
 type RevalidableDashboardSnapshot = typeof getDashboardSnapshot & {
   revalidate?: () => Promise<void>
@@ -616,9 +621,11 @@ async function refreshMaterializedViews(): Promise<void> {
   )
 }
 
-function scheduleDashboardRefresh(force = false): Promise<void> | null {
+function scheduleDashboardRefresh(tenantId: string, force = false): Promise<void> | null {
   const now = Date.now()
+  pendingRefreshTenants.add(tenantId)
   if (!force && now - lastMaterializedRefreshAt < MATERIALIZED_VIEW_REFRESH_INTERVAL_MS) {
+    bypassRedisCacheTenants.add(tenantId)
     return null
   }
   if (pendingMaterializedRefresh) return pendingMaterializedRefresh
@@ -628,6 +635,10 @@ function scheduleDashboardRefresh(force = false): Promise<void> | null {
       await refreshMaterializedViews()
       lastMaterializedRefreshAt = Date.now()
       bypassRedisCache = true
+      for (const pendingTenantId of pendingRefreshTenants) {
+        bypassRedisCacheTenants.add(pendingTenantId)
+      }
+      pendingRefreshTenants.clear()
       const snapshotCache = getDashboardSnapshot as RevalidableDashboardSnapshot
       if (typeof snapshotCache.revalidate === 'function') {
         await snapshotCache.revalidate()
@@ -637,6 +648,7 @@ function scheduleDashboardRefresh(force = false): Promise<void> | null {
     } catch (error) {
       console.error('[dashboard] refresh failed; continuing without blocking request', error)
     } finally {
+      pendingRefreshTenants.clear()
       pendingMaterializedRefresh = null
     }
   })()
@@ -645,7 +657,11 @@ function scheduleDashboardRefresh(force = false): Promise<void> | null {
 }
 
 export async function refreshDashboardSnapshot(waitForRefresh = true, force = true) {
-  const refreshPromise = scheduleDashboardRefresh(force)
+  const tenantId = await getTenantFromSession()
+  if (!tenantId) {
+    return
+  }
+  const refreshPromise = scheduleDashboardRefresh(tenantId, force)
   if (waitForRefresh && refreshPromise) {
     await refreshPromise
   }

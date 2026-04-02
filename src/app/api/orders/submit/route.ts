@@ -9,6 +9,7 @@ import {
 import { logActivity } from '@/lib/log-activity'
 import { invalidateDashboardCache, refreshDashboardSnapshot, revalidateDashboardTag } from '@/lib/repository/dashboard'
 import { publishRealtimeEvent } from '@/lib/pubsub'
+import { lockMaterialMutations, nextManualOrderNumber } from '@/lib/concurrency'
 
 type ItemPayload = {
   materialId: number
@@ -22,7 +23,6 @@ type ItemPayload = {
 
 type MaterialLookupRow = { id: number }
 type MaterialDescriptionRow = { description: string | null }
-type OrderIdRow = { id: number }
 type CreatedOrderItemRow = {
   order_number: string | null
   status: string | null
@@ -109,6 +109,12 @@ export async function POST(request: NextRequest) {
       const notificationMaterialIds = new Set<number>()
 
       await client.query('BEGIN')
+      await lockMaterialMutations(
+        client,
+        auth.tenantId,
+        items.map((item) => item.materialId)
+      )
+
       const orderRes = await client.query(
         'INSERT INTO orders (status, total, created_by, client_name, due_date, tenant_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, status, total, created_at',
         [payload.status ?? 'draft', total, auth.userId, payload.clientName ?? null, payload.dueDate ? new Date(payload.dueDate) : null, auth.tenantId]
@@ -200,16 +206,8 @@ export async function POST(request: NextRequest) {
         notificationMaterialIds.add(materialId)
       }
 
-      // compute daily sequence for orderNumber (transactional, then persist)
       const createdAtInserted = orderRes.rows[0].created_at ?? new Date().toISOString()
-      const dateStr = new Date(createdAtInserted).toISOString().slice(0, 10) // YYYY-MM-DD
-      const dateKey = dateStr.replace(/-/g, '') // YYYYMMDD
-      const sameDayRes = await client.query('SELECT id FROM orders WHERE created_at::date = $1::date AND tenant_id = $2::uuid ORDER BY created_at ASC', [dateStr, auth.tenantId])
-      const sameDayRows = sameDayRes.rows as OrderIdRow[]
-      const ids = sameDayRows.map((r) => Number(r.id))
-      const pos = ids.indexOf(orderId)
-      const seq = pos >= 0 ? (pos + 1) : (ids.length)
-      const orderNumber = `${dateKey}${String(seq).padStart(2, '0')}`
+      const orderNumber = await nextManualOrderNumber(client, auth.tenantId, createdAtInserted)
 
       await client.query('UPDATE orders SET order_number = $1 WHERE id = $2', [orderNumber, orderId])
 

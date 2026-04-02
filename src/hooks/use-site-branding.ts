@@ -17,82 +17,120 @@ export type SiteBranding = {
 
 const FALLBACK_BRANDING: SiteBranding = {
   companyName: 'Black Tower X',
-  platformLabel: 'Inventário Ágil',
+  platformLabel: 'InventÃ¡rio Ãgil',
   logoSrc: '/black-tower-x-transp.png',
 };
 
 const CACHE_KEY = 'site-branding';
 const COOKIE_KEY = 'site-branding';
 
+let cachedBranding: SiteBranding | null = null;
+let brandingResolvedOnce = false;
+let brandingInFlight: Promise<SiteBranding> | null = null;
+
+function readCachedBrandingFromStorage(): SiteBranding | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as SiteBranding) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistBranding(branding: SiteBranding) {
+  cachedBranding = branding;
+  brandingResolvedOnce = true;
+  localStorage.setItem(CACHE_KEY, JSON.stringify(branding));
+  window.dispatchEvent(new Event('site-branding-updated'));
+
+  try {
+    const cookieValue = btoa(JSON.stringify(branding));
+    document.cookie = `${COOKIE_KEY}=${cookieValue};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
+  } catch {}
+}
+
+async function fetchBrandingFromApi(): Promise<SiteBranding> {
+  if (brandingInFlight) {
+    return brandingInFlight;
+  }
+
+  brandingInFlight = (async () => {
+    const response = await fetch('/api/site', { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('Falha ao carregar identidade');
+    }
+    const payload = (await response.json()) as SiteBrandingResponse;
+
+    const logoDataUrl = typeof payload.logoDataUrl === 'string' ? payload.logoDataUrl.trim() : null;
+    const logoUrl = typeof payload.logoUrl === 'string' ? payload.logoUrl.trim() : null;
+    const logoSrc = logoDataUrl || logoUrl || FALLBACK_BRANDING.logoSrc;
+
+    const nextBranding = {
+      companyName: payload.companyName?.trim() || FALLBACK_BRANDING.companyName,
+      platformLabel: payload.platformLabel?.trim() || FALLBACK_BRANDING.platformLabel,
+      logoSrc,
+    };
+
+    persistBranding(nextBranding);
+    return nextBranding;
+  })();
+
+  try {
+    return await brandingInFlight;
+  } finally {
+    brandingInFlight = null;
+  }
+}
+
 export function useSiteBranding() {
-  const [branding, setBranding] = useState<SiteBranding>(FALLBACK_BRANDING);
-  const [loading, setLoading] = useState(true);
+  const [branding, setBranding] = useState<SiteBranding>(cachedBranding ?? FALLBACK_BRANDING);
+  const [loading, setLoading] = useState(!brandingResolvedOnce);
   const [hasHydrated, setHasHydrated] = useState(false);
 
-  const fetchBranding = useCallback(async (active: boolean) => {
+  const refreshBranding = useCallback(async () => {
     try {
-      const response = await fetch('/api/site', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error('Falha ao carregar identidade');
-      }
-      const payload = (await response.json()) as SiteBrandingResponse;
-
-      if (!active) return;
-
-      const logoDataUrl =
-        typeof payload.logoDataUrl === 'string' ? payload.logoDataUrl.trim() : null;
-      const logoUrl = typeof payload.logoUrl === 'string' ? payload.logoUrl.trim() : null;
-      const logoSrc = logoDataUrl || logoUrl || FALLBACK_BRANDING.logoSrc;
-
-      const newBranding = {
-        companyName: payload.companyName?.trim() || FALLBACK_BRANDING.companyName,
-        platformLabel: payload.platformLabel?.trim() || FALLBACK_BRANDING.platformLabel,
-        logoSrc,
-      };
-
-      setBranding(newBranding);
-      localStorage.setItem(CACHE_KEY, JSON.stringify(newBranding));
-      window.dispatchEvent(new Event('site-branding-updated'));
-
-      try {
-        const cookieValue = btoa(JSON.stringify(newBranding));
-        document.cookie = `${COOKIE_KEY}=${cookieValue};path=/;max-age=${60 * 60 * 24 * 365};SameSite=Lax`;
-      } catch {}
+      const nextBranding = await fetchBrandingFromApi();
+      setBranding(nextBranding);
     } catch (error) {
       console.error('Branding fetch error:', error);
     } finally {
-      if (active) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
 
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      try {
-        setBranding(JSON.parse(cached));
-      } catch {}
+    const storageBranding = readCachedBrandingFromStorage();
+    if (storageBranding) {
+      cachedBranding = storageBranding;
+      brandingResolvedOnce = true;
+      setBranding(storageBranding);
+      setLoading(false);
     }
+
     setHasHydrated(true);
 
-    fetchBranding(active);
+    if (!brandingResolvedOnce) {
+      refreshBranding();
+    }
 
     const updateFromCache = () => {
-      const currentCache = localStorage.getItem(CACHE_KEY);
-      if (currentCache) {
-        try {
-          setBranding(JSON.parse(currentCache));
-        } catch {}
+      const currentCache = readCachedBrandingFromStorage();
+      if (active && currentCache) {
+        cachedBranding = currentCache;
+        setBranding(currentCache);
       }
     };
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === CACHE_KEY && e.newValue) {
         try {
-          setBranding(JSON.parse(e.newValue));
+          const nextBranding = JSON.parse(e.newValue) as SiteBranding;
+          cachedBranding = nextBranding;
+          if (active) {
+            setBranding(nextBranding);
+          }
         } catch {}
       }
     };
@@ -105,12 +143,12 @@ export function useSiteBranding() {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('site-branding-updated', updateFromCache);
     };
-  }, [fetchBranding]);
+  }, [refreshBranding]);
 
   return {
     branding,
     loading: loading && !hasHydrated,
     hasHydrated,
-    refreshBranding: () => fetchBranding(true),
+    refreshBranding,
   };
 }

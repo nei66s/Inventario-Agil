@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Order, StockBalance, User } from '@/lib/domain/types';
 import { formatDate } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
+import { applyPickingDrafts, pruneResolvedPickingDrafts } from '@/lib/frontend/picking-client-state';
 import {
   Select,
   SelectContent,
@@ -43,11 +44,15 @@ export default function PickingPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [stockBalances, setStockBalances] = useState<StockBalance[]>([]);
   const dataFingerprintRef = useRef('');
+  const pendingPickingDraftsRef = useRef<Record<string, Record<string, { qtySeparated?: number; separatedWeight?: number }>>>({});
+  const loadDataRequestRef = useRef(0);
+  const appliedLoadDataRequestRef = useRef(0);
 
   const [filter, setFilter] = React.useState<'READY_FULL' | 'READY_PARTIAL' | 'ALL'>('ALL');
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadDataRequestRef.current;
     let refreshed = false;
     try {
       const [ordersRes, usersRes, inventoryRes] = await Promise.all([
@@ -64,6 +69,10 @@ export default function PickingPage() {
         usersRes.json(),
         inventoryRes.json(),
       ]);
+      if (requestId < appliedLoadDataRequestRef.current) {
+        return;
+      }
+      appliedLoadDataRequestRef.current = requestId;
 
       const nextOrders = Array.isArray(ordersPayload) ? ordersPayload : [];
       const nextUsers = Array.isArray(usersPayload) ? usersPayload : [];
@@ -71,8 +80,11 @@ export default function PickingPage() {
         ? inventoryPayload.stockBalances
         : [];
 
+      pendingPickingDraftsRef.current = pruneResolvedPickingDrafts(nextOrders, pendingPickingDraftsRef.current);
+      const mergedOrders = applyPickingDrafts(nextOrders, pendingPickingDraftsRef.current);
+
       const nextFingerprint = JSON.stringify({
-        orders: nextOrders,
+        orders: mergedOrders,
         users: nextUsers,
         stockBalances: nextStockBalances,
       });
@@ -81,7 +93,7 @@ export default function PickingPage() {
 
       if (nextFingerprint !== dataFingerprintRef.current && !isTyping) {
         dataFingerprintRef.current = nextFingerprint;
-        setOrders(nextOrders);
+        setOrders(mergedOrders);
         setUsers(nextUsers);
         setStockBalances(nextStockBalances);
         refreshed = true;
@@ -155,6 +167,13 @@ export default function PickingPage() {
   };
 
   const updateSeparatedQtyLocal = (orderId: string, itemId: string, qty: number) => {
+    pendingPickingDraftsRef.current[orderId] = {
+      ...(pendingPickingDraftsRef.current[orderId] ?? {}),
+      [itemId]: {
+        ...(pendingPickingDraftsRef.current[orderId]?.[itemId] ?? {}),
+        qtySeparated: qty,
+      },
+    };
     setOrders((prev) =>
       prev.map((order) =>
         order.id !== orderId
@@ -170,6 +189,14 @@ export default function PickingPage() {
   };
 
   const updateSeparatedWeightLocal = (orderId: string, itemId: string, weight: number, autoSeparatedQty?: number) => {
+    pendingPickingDraftsRef.current[orderId] = {
+      ...(pendingPickingDraftsRef.current[orderId] ?? {}),
+      [itemId]: {
+        ...(pendingPickingDraftsRef.current[orderId]?.[itemId] ?? {}),
+        separatedWeight: weight,
+        ...(autoSeparatedQty !== undefined ? { qtySeparated: autoSeparatedQty } : {}),
+      },
+    };
     setOrders((prev) =>
       prev.map((order) =>
         order.id !== orderId

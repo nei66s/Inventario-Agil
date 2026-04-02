@@ -30,6 +30,7 @@ import { getFirstApiErrorMessage } from '@/lib/api/errors';
 import { useAuthUser } from '@/hooks/use-auth';
 import { OperationModeSelector } from '@/features/tenant-operation-mode/operation-mode-selector';
 import { Material, Order, StockBalance, StockReservation, User } from '@/lib/domain/types';
+import { applyOrderDraft, OrderDraft, pruneResolvedOrderDraft } from '@/lib/frontend/orders-client-state';
 
 type ConditionCategory = {
   id: number;
@@ -92,7 +93,9 @@ function EditableInput({
 }
 
 export default function OrdersPage() {
-  const clientNameDraftRef = React.useRef<Record<string, string>>({});
+  const pendingOrderDraftsRef = React.useRef<Record<string, OrderDraft>>({});
+  const refreshOrdersRequestRef = React.useRef(0);
+  const appliedRefreshOrdersRequestRef = React.useRef(0);
   const [db, setDb] = React.useState<{
     orders: Order[];
     materials: Material[];
@@ -105,18 +108,41 @@ export default function OrdersPage() {
   const currentUserId = authUser?.id ?? '';
   const { toast } = useToast();
 
+  const updateOrderDraft = React.useCallback((orderId: string, updater: (draft: OrderDraft) => OrderDraft | null) => {
+    const current = pendingOrderDraftsRef.current[orderId] ?? {};
+    const next = updater(current);
+    if (!next || (Object.keys(next).length === 0 && !next.items)) {
+      delete pendingOrderDraftsRef.current[orderId];
+      return;
+    }
+    const hasItems = next.items && Object.keys(next.items).length > 0;
+    pendingOrderDraftsRef.current[orderId] = hasItems ? next : { ...next, items: undefined };
+  }, []);
+
+  const pruneOrderDraft = React.useCallback((serverOrder: Order) => {
+    const nextDraft = pruneResolvedOrderDraft(serverOrder, pendingOrderDraftsRef.current[serverOrder.id]);
+    if (!nextDraft) {
+      delete pendingOrderDraftsRef.current[serverOrder.id];
+      return;
+    }
+    pendingOrderDraftsRef.current[serverOrder.id] = nextDraft;
+  }, []);
+
   const refreshOrders = React.useCallback(async () => {
+    const requestId = ++refreshOrdersRequestRef.current;
     const res = await fetch('/api/orders', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
+    if (requestId < appliedRefreshOrdersRequestRef.current) return;
+    appliedRefreshOrdersRequestRef.current = requestId;
     const incomingOrders = Array.isArray(data) ? data : [];
-    const mergedOrders = incomingOrders.map((order) => {
-      const draftClientName = clientNameDraftRef.current[order.id];
-      if (draftClientName === undefined) return order;
-      return { ...order, clientName: draftClientName };
+    const mergedOrders = incomingOrders.map((rawOrder) => {
+      const order = rawOrder as Order;
+      pruneOrderDraft(order);
+      return applyOrderDraft(order, pendingOrderDraftsRef.current[order.id]);
     });
     setDb((prev) => ({ ...prev, orders: mergedOrders }));
-  }, []);
+  }, [pruneOrderDraft]);
 
   const refreshInventory = React.useCallback(async () => {
     const res = await fetch('/api/inventory', { cache: 'no-store' });
@@ -189,14 +215,14 @@ export default function OrdersPage() {
   }, [refreshOrders]);
 
   const updateOrderClientName = React.useCallback((orderId: string, clientName: string) => {
-    clientNameDraftRef.current[orderId] = clientName;
+    updateOrderDraft(orderId, (draft) => ({ ...draft, clientName }));
     setDb((prev) => ({
       ...prev,
       orders: prev.orders.map((order) =>
         order.id === orderId ? { ...order, clientName } : order
       ),
     }));
-  }, []);
+  }, [updateOrderDraft]);
 
   const persistOrderClientName = React.useCallback(async (orderId: string, clientName: string) => {
     await fetch(`/api/orders/${orderId}`, {
@@ -204,11 +230,19 @@ export default function OrdersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_client', clientName }),
     });
-    if (clientNameDraftRef.current[orderId] === clientName) {
-      delete clientNameDraftRef.current[orderId];
-    }
     await refreshOrders();
   }, [refreshOrders]);
+
+  const updateOrderMetaLocal = React.useCallback(
+    (orderId: string, payload: Partial<Pick<Order, 'dueDate' | 'volumeCount' | 'operationMode'>>) => {
+      updateOrderDraft(orderId, (draft) => ({ ...draft, ...payload }));
+      setDb((prev) => ({
+        ...prev,
+        orders: prev.orders.map((order) => (order.id === orderId ? { ...order, ...payload } : order)),
+      }));
+    },
+    [updateOrderDraft]
+  );
 
   const updateOrderItemField = React.useCallback(
     (orderId: string, itemId: string, payload: {
@@ -219,6 +253,16 @@ export default function OrdersPage() {
       itemCondition?: string;
       conditionTemplateName?: string
     }) => {
+      updateOrderDraft(orderId, (draft) => ({
+        ...draft,
+        items: {
+          ...(draft.items ?? {}),
+          [itemId]: {
+            ...(draft.items?.[itemId] ?? {}),
+            ...payload,
+          },
+        },
+      }));
       setDb((prev) => ({
         ...prev,
         orders: prev.orders.map((order) => {
@@ -238,7 +282,33 @@ export default function OrdersPage() {
         }),
       }));
     },
-    []
+    [updateOrderDraft]
+  );
+
+  const updateOrderItemConditionsLocal = React.useCallback(
+    (orderId: string, itemId: string, conditions: NonNullable<Order['items'][number]['conditions']>) => {
+      updateOrderDraft(orderId, (draft) => ({
+        ...draft,
+        items: {
+          ...(draft.items ?? {}),
+          [itemId]: {
+            ...(draft.items?.[itemId] ?? {}),
+            conditions,
+          },
+        },
+      }));
+      setDb((prev) => ({
+        ...prev,
+        orders: prev.orders.map((order) => {
+          if (order.id !== orderId) return order;
+          return {
+            ...order,
+            items: order.items.map((item) => (item.id === itemId ? { ...item, conditions } : item)),
+          };
+        }),
+      }));
+    },
+    [updateOrderDraft]
   );
 
   const persistOrderItemField = React.useCallback(
@@ -763,12 +833,7 @@ export default function OrdersPage() {
                     disabled={isFinalized}
                     onChange={(e) => {
                       const val = `${e.target.value}T12:00:00.000Z`;
-                      setDb((prev) => ({
-                        ...prev,
-                        orders: prev.orders.map((o) =>
-                          o.id === selectedOrder.id ? { ...o, dueDate: val } : o
-                        ),
-                      }));
+                      updateOrderMetaLocal(selectedOrder.id, { dueDate: val });
                     }}
                     onBlur={(e) => updateOrderMeta(selectedOrder.id, { dueDate: `${e.target.value}T12:00:00.000Z` })}
                   />
@@ -785,12 +850,7 @@ export default function OrdersPage() {
                     disabled={isFinalized}
                     onChange={(e) => {
                       const val = Number(e.target.value);
-                      setDb((prev) => ({
-                        ...prev,
-                        orders: prev.orders.map((o) =>
-                          o.id === selectedOrder.id ? { ...o, volumeCount: val } : o
-                        ),
-                      }));
+                      updateOrderMetaLocal(selectedOrder.id, { volumeCount: val });
                     }}
                     onBlur={(e) => updateOrderMeta(selectedOrder.id, { volumeCount: Number(e.target.value) })}
                     onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
@@ -801,12 +861,7 @@ export default function OrdersPage() {
                   <OperationModeSelector
                     value={selectedOrder.operationMode ?? 'BOTH'}
                     onChange={(value) => {
-                      setDb((prev) => ({
-                        ...prev,
-                        orders: prev.orders.map((o) =>
-                          o.id === selectedOrder.id ? { ...o, operationMode: value } : o
-                        ),
-                      }));
+                      updateOrderMetaLocal(selectedOrder.id, { operationMode: value });
                       updateOrderMeta(selectedOrder.id, { operationMode: value });
                     }}
                     className="w-full"
@@ -899,6 +954,12 @@ export default function OrdersPage() {
                                     step={selectedOrderOperationMode === 'WEIGHT' ? '0.01' : undefined}
                                     value={String(item.qtyRequested ?? '')}
                                     placeholder={selectedOrderOperationMode === 'WEIGHT' ? 'Peso' : 'Qtd.'}
+                                    onChangeClient={(val) => {
+                                      const qty = val === '' ? 0 : Number(val);
+                                      updateOrderItemField(selectedOrder.id, item.id, {
+                                        qtyRequested: Number.isFinite(qty) ? qty : 0,
+                                      });
+                                    }}
                                     onSave={(val) => {
                                       const qty = val === '' ? 0 : Number(val);
                                       updateOrderItemField(selectedOrder.id, item.id, {
@@ -928,6 +989,11 @@ export default function OrdersPage() {
                                       step="0.01"
                                       value={String(item.requestedWeight ?? '')}
                                       placeholder="Peso"
+                                      onChangeClient={(val) => {
+                                        const requestedWeight = val === '' ? 0 : Number(val);
+                                        const nextValue = Number.isFinite(requestedWeight) ? requestedWeight : 0;
+                                        updateOrderItemField(selectedOrder.id, item.id, { requestedWeight: nextValue });
+                                      }}
                                       onSave={(val) => {
                                         const requestedWeight = val === '' ? 0 : Number(val);
                                         const nextValue = Number.isFinite(requestedWeight) ? requestedWeight : 0;
@@ -990,6 +1056,9 @@ export default function OrdersPage() {
                                     name={`color-${item.id}`}
                                     placeholder="Cor"
                                     value={item.color ?? ''}
+                                    onChangeClient={(val) => {
+                                      updateOrderItemField(selectedOrder.id, item.id, { color: val });
+                                    }}
                                     onSave={(val) => {
                                       updateOrderItemField(selectedOrder.id, item.id, { color: val });
                                       persistOrderItemField(selectedOrder.id, item.id, { color: String(val ?? '') });
@@ -1039,24 +1108,11 @@ export default function OrdersPage() {
                                             placeholder="Campo (ex: Cor)"
                                             value={cond.key}
                                             onChangeClient={(val) => {
-                                              const nextVal = val;
-                                              setDb((prev) => ({
-                                                ...prev,
-                                                orders: prev.orders.map((o) => {
-                                                  if (o.id !== selectedOrder.id) return o;
-                                                  return {
-                                                    ...o,
-                                                    items: o.items.map((it) => {
-                                                      if (it.id !== item.id) return it;
-                                                      const nextConditions = [...(it.conditions || [])];
-                                                      if (nextConditions[idx]) {
-                                                        nextConditions[idx] = { ...nextConditions[idx], key: nextVal };
-                                                      }
-                                                      return { ...it, conditions: nextConditions };
-                                                    }),
-                                                  };
-                                                }),
-                                              }));
+                                              const nextConditions = [...(item.conditions || [])];
+                                              if (nextConditions[idx]) {
+                                                nextConditions[idx] = { ...nextConditions[idx], key: val };
+                                              }
+                                              updateOrderItemConditionsLocal(selectedOrder.id, item.id, nextConditions);
                                             }}
                                             onSave={(val) => updateItemConditionField(selectedOrder.id, item.id, idx, { key: val })}
                                             className="h-8"
@@ -1068,24 +1124,11 @@ export default function OrdersPage() {
                                             placeholder="Valor (ex: Vermelho)"
                                             value={cond.value}
                                             onChangeClient={(val) => {
-                                              const nextVal = val;
-                                              setDb((prev) => ({
-                                                ...prev,
-                                                orders: prev.orders.map((o) => {
-                                                  if (o.id !== selectedOrder.id) return o;
-                                                  return {
-                                                    ...o,
-                                                    items: o.items.map((it) => {
-                                                      if (it.id !== item.id) return it;
-                                                      const nextConditions = [...(it.conditions || [])];
-                                                      if (nextConditions[idx]) {
-                                                        nextConditions[idx] = { ...nextConditions[idx], value: nextVal };
-                                                      }
-                                                      return { ...it, conditions: nextConditions };
-                                                    }),
-                                                  };
-                                                }),
-                                              }));
+                                              const nextConditions = [...(item.conditions || [])];
+                                              if (nextConditions[idx]) {
+                                                nextConditions[idx] = { ...nextConditions[idx], value: val };
+                                              }
+                                              updateOrderItemConditionsLocal(selectedOrder.id, item.id, nextConditions);
                                             }}
                                             onSave={(val) => updateItemConditionField(selectedOrder.id, item.id, idx, { value: val })}
                                             disabled={isFinalized}
