@@ -58,6 +58,8 @@ Cada pedido agora possui `operation_mode` proprio:
 
 Essa escolha faz parte do proprio pedido e nao depende de uma preferencia global do tenant ou do navegador.
 
+Os campos editaveis da tela de pedidos usam um buffer local durante a digitacao e protecao contra refresh assincrono da lista. Isso evita que campos como `Cliente` sejam sobrescritos momentaneamente por respostas antigas da API enquanto o usuario ainda esta editando ou acabou de sair do campo.
+
 ### Picking
 
 O fluxo de picking le o `operation_mode` do pedido selecionado:

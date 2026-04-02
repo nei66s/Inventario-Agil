@@ -59,6 +59,7 @@ function EditableInput({
 }) {
   const [localValue, setLocalValue] = React.useState(value);
   const [isFocused, setIsFocused] = React.useState(false);
+  const focusStartValueRef = React.useRef(value);
 
   React.useEffect(() => {
     if (!isFocused) {
@@ -71,6 +72,7 @@ function EditableInput({
       {...props}
       value={localValue}
       onFocus={(e) => {
+        focusStartValueRef.current = value;
         setIsFocused(true);
         props.onFocus?.(e);
       }}
@@ -80,8 +82,8 @@ function EditableInput({
       }}
       onBlur={(e) => {
         setIsFocused(false);
-        if (localValue !== value) {
-          onSave(e.target.value);
+        if (localValue !== focusStartValueRef.current) {
+          onSave(localValue);
         }
         props.onBlur?.(e);
       }}
@@ -90,6 +92,7 @@ function EditableInput({
 }
 
 export default function OrdersPage() {
+  const clientNameDraftRef = React.useRef<Record<string, string>>({});
   const [db, setDb] = React.useState<{
     orders: Order[];
     materials: Material[];
@@ -106,7 +109,13 @@ export default function OrdersPage() {
     const res = await fetch('/api/orders', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
-    setDb((prev) => ({ ...prev, orders: Array.isArray(data) ? data : [] }));
+    const incomingOrders = Array.isArray(data) ? data : [];
+    const mergedOrders = incomingOrders.map((order) => {
+      const draftClientName = clientNameDraftRef.current[order.id];
+      if (draftClientName === undefined) return order;
+      return { ...order, clientName: draftClientName };
+    });
+    setDb((prev) => ({ ...prev, orders: mergedOrders }));
   }, []);
 
   const refreshInventory = React.useCallback(async () => {
@@ -180,6 +189,7 @@ export default function OrdersPage() {
   }, [refreshOrders]);
 
   const updateOrderClientName = React.useCallback((orderId: string, clientName: string) => {
+    clientNameDraftRef.current[orderId] = clientName;
     setDb((prev) => ({
       ...prev,
       orders: prev.orders.map((order) =>
@@ -194,6 +204,9 @@ export default function OrdersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_client', clientName }),
     });
+    if (clientNameDraftRef.current[orderId] === clientName) {
+      delete clientNameDraftRef.current[orderId];
+    }
     await refreshOrders();
   }, [refreshOrders]);
 

@@ -14,6 +14,8 @@ O formato e baseado em Keep a Changelog, com versoes seguindo Semantic Versionin
 
 ### Corrigido / Aprimorado
 - Tela de `Pedidos` ajustada para reagir ao tipo do pedido durante a edicao.
+- Campos editaveis de `Pedidos` endurecidos contra refresh assincrono para evitar que `Cliente` e outros inputs percam o valor digitado ao trocar de foco.
+- `EditableInput` passou a salvar comparando contra o valor capturado no foco, evitando falso negativo no `blur` quando o estado externo ja foi atualizado localmente.
 - `Picking` passou a usar o modo do proprio pedido, com labels e validacoes especificas.
 - `Producao` passou a usar o modo do proprio pedido, com badges e validacoes coerentes.
 - `Picking` e `Producao` passaram a exibir `peso solicitado` como referencia visual quando disponivel.

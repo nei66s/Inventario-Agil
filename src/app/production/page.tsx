@@ -59,6 +59,7 @@ function EditableInput({
 }) {
   const [localValue, setLocalValue] = React.useState(value);
   const [isFocused, setIsFocused] = React.useState(false);
+  const focusStartValueRef = React.useRef(value);
 
   React.useEffect(() => {
     if (!isFocused) {
@@ -71,6 +72,7 @@ function EditableInput({
       {...props}
       value={localValue}
       onFocus={(e) => {
+        focusStartValueRef.current = value;
         setIsFocused(true);
         props.onFocus?.(e);
       }}
@@ -80,8 +82,8 @@ function EditableInput({
       }}
       onBlur={(e) => {
         setIsFocused(false);
-        if (localValue !== value) {
-          onSave(e.target.value);
+        if (localValue !== focusStartValueRef.current) {
+          onSave(localValue);
         }
         props.onBlur?.(e);
       }}
