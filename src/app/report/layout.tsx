@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
+import { RealtimeListener } from "@/components/RealtimeListener";
 import { getCurrentUser } from '@/lib/auth';
 
 export default async function ReportLayout({
@@ -13,5 +14,10 @@ export default async function ReportLayout({
     redirect('/login');
   }
 
-  return <AppShell user={user}>{children}</AppShell>;
+  return (
+    <>
+      <RealtimeListener />
+      <AppShell user={user}>{children}</AppShell>
+    </>
+  );
 }
