@@ -11,8 +11,17 @@ O projeto foi construido com Next.js App Router e TypeScript, com persistencia e
 - Gestao de pedidos com reserva de estoque e sinalizacao de falta de material.
 - Fluxo de producao e picking integrado ao status operacional.
 - Arquitetura multi-tenant com RLS no banco.
+- Login com suporte a dominio por tenant para ajudar no roteamento da empresa correta.
+- Painel da plataforma separado do login operacional dos tenants.
 - Dashboard com consultas otimizadas e atualizacao em segundo plano.
 - Onboarding de tenants e estrutura de billing recorrente.
+
+## Tenants e dominios de login
+
+- O isolamento principal continua sendo feito por `tenant_id` no usuario e na sessao.
+- Cada tenant pode ter um ou mais dominios de login cadastrados em `tenant_login_domains`.
+- Esses dominios ajudam a identificar a empresa correta no login, mas nao substituem a seguranca baseada em `tenant_id`.
+- O cadastro e a edicao desses dominios ficam disponiveis no painel de plataforma em `/platform/tenants`.
 
 ## Stack principal
 

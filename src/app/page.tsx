@@ -1,12 +1,12 @@
-import { LandingHeader } from '@/components/landing/LandingHeader';
-import { LandingHero } from '@/components/landing/LandingHero';
-import { LandingFeatures } from '@/components/landing/LandingFeatures';
-import { LandingPricing } from '@/components/landing/LandingPricing';
-import { LandingFooter } from '@/components/landing/LandingFooter';
-import { WhatsAppButton } from '@/components/WhatsAppButton';
-import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { LandingFeatures } from '@/components/landing/LandingFeatures';
+import { LandingFooter } from '@/components/landing/LandingFooter';
+import { LandingHeader } from '@/components/landing/LandingHeader';
+import { LandingHero } from '@/components/landing/LandingHero';
+import { LandingPricing } from '@/components/landing/LandingPricing';
+import { WhatsAppButton } from '@/components/WhatsAppButton';
+import { Button } from '@/components/ui/button';
 
 export default function HomePage() {
   return (
@@ -17,20 +17,27 @@ export default function HomePage() {
         <LandingFeatures />
         <LandingPricing />
 
-        <section className="py-24 bg-slate-50 dark:bg-slate-900/30">
-          <div className="max-w-4xl mx-auto px-6 text-center space-y-8">
-            <h2 className="text-3xl md:text-5xl font-bold font-headline text-slate-900 dark:text-white">
-              Pronto para acelerar sua logística?
-            </h2>
-            <p className="text-lg text-slate-600 dark:text-slate-400">
-              Junte-se a centenas de empresas que já transformaram seus armazéns em centros de tecnologia.
-            </p>
-            <div className="flex justify-center">
-              <Button size="lg" className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-500/20 rounded-2xl h-14 px-8 text-lg font-bold" asChild>
-                <Link href="/register">
-                  Testar Grátis <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
+        <section className="border-t border-slate-200/70 bg-slate-50 py-16 dark:border-slate-800/70 dark:bg-slate-900/40">
+          <div className="mx-auto max-w-4xl px-6 text-center">
+            <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-10 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:px-10">
+              <h2 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white md:text-4xl">
+                Quer colocar essa operacao para rodar com mais controle?
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-600 dark:text-slate-300">
+                Uma home mais limpa, clara no modo claro e consistente no escuro, sem excesso de efeito visual.
+              </p>
+              <div className="mt-8 flex justify-center">
+                <Button
+                  size="lg"
+                  className="h-12 rounded-xl bg-indigo-600 px-6 font-semibold text-white hover:bg-indigo-700"
+                  asChild
+                >
+                  <Link href="/register">
+                    Testar gratis
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+              </div>
             </div>
           </div>
         </section>

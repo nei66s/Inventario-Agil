@@ -85,3 +85,12 @@ Use [.env.example](../.env.example) como base para novos ambientes.
 - Nunca versione o `.env` real.
 - Use segredos diferentes entre desenvolvimento, preview e producao.
 - Revise variaveis de billing e autenticacao antes de cada deploy.
+
+## Tenant login domains
+
+O recurso de dominios por tenant nao depende de variavel de ambiente.
+
+- O mapeamento fica no banco, na tabela `tenant_login_domains`.
+- O login pode usar o dominio do email para ajudar na identificacao do tenant correto.
+- O controle desses dominios pode ser feito pelo painel de plataforma em `/platform/tenants`.
+- O dominio e um apoio de roteamento; a regra oficial de seguranca continua sendo o `tenant_id` do usuario.

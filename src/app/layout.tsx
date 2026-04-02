@@ -65,12 +65,13 @@ export default function RootLayout({
             __html: `
               (() => {
                 const STORAGE_KEY = 'theme';
+                const PREFERENCE_KEY = 'theme_preference_set';
                 const COOKIE_KEY = 'theme';
                 const isTheme = (value) => value === 'dark' || value === 'light';
 
-                const readStorage = () => {
+                const readStorage = (key = STORAGE_KEY) => {
                   try {
-                    return localStorage.getItem(STORAGE_KEY);
+                    return localStorage.getItem(key);
                   } catch {
                     return null;
                   }
@@ -99,10 +100,11 @@ export default function RootLayout({
 
                 try {
                   const stored = readStorage();
+                  const preferenceWasSet = readStorage(PREFERENCE_KEY);
                   const cookie = readCookie();
-                  const theme = isTheme(stored)
+                  const theme = preferenceWasSet === 'true' && isTheme(stored)
                     ? stored
-                    : isTheme(cookie)
+                    : preferenceWasSet === 'true' && isTheme(cookie)
                       ? cookie
                       : 'light';
 
@@ -110,6 +112,9 @@ export default function RootLayout({
                   root.classList.toggle('dark', theme === 'dark');
                   root.dataset.theme = theme;
                   writeStorage(theme);
+                  try {
+                    localStorage.setItem(PREFERENCE_KEY, preferenceWasSet === 'true' ? 'true' : 'false');
+                  } catch {}
                   writeCookie(theme);
                 } catch {}
               })();
