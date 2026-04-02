@@ -82,7 +82,7 @@ const parseBucketToDate = (label?: string | number) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const SEPARATION_STATUSES = new Set(['EM_PICKING']);
+const SEPARATION_STATUSES = new Set(['EM_PICKING', 'ABERTO']);
 
 const isFinalizedStatus = (status?: string | null) => status === 'FINALIZADO' || status === 'SAIDA_CONCLUIDA';
 const isInSeparationStatus = (status?: string | null) => (status ? SEPARATION_STATUSES.has(status) : false);
@@ -93,7 +93,12 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
   const { toast } = useToast();
   const { isConnected } = useRealtimeStore();
   const activeTab = searchParams.get('tab') || 'business';
-  const [period, setPeriod] = useState<'month' | 'all'>('month');
+  const peoplePeriod = searchParams.get('peoplePeriod') === '7d'
+    ? '7d'
+    : searchParams.get('peoplePeriod') === 'all'
+      ? 'all'
+      : '30d';
+  const [period, setPeriod] = useState<'month' | 'all'>('all');
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
@@ -310,10 +315,15 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
         period === 'all'
           ? activeOrders.filter((order) => order.orderDate.slice(0, 7) === bucket)
           : activeOrders.filter((order) => order.orderDate.slice(0, 10) === bucket);
+      const canceledOnBucket =
+        period === 'all'
+          ? orders.filter((order) => order.trashedAt?.slice(0, 7) === bucket)
+          : orders.filter((order) => order.trashedAt?.slice(0, 10) === bucket);
       const created = ordersOnBucket.length;
       const inSeparation = ordersOnBucket.filter((order) => isInSeparationStatus(order.status)).length;
       const finalized = ordersOnBucket.filter((order) => isFinalizedStatus(order.status)).length;
-      return { date: bucket, created, inSeparation, finalized };
+      const canceled = canceledOnBucket.length;
+      return { date: bucket, created, inSeparation, finalized, canceled };
     });
   }, [activeOrders, period, selectedMonth, orders]);
 
@@ -324,7 +334,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
   };
 
   const ordersComparisonSeriesHasData = ordersComparisonSeries.every(
-    (serie) => serie.created === 0 && serie.inSeparation === 0 && serie.finalized === 0
+    (serie) => serie.created === 0 && serie.inSeparation === 0 && serie.finalized === 0 && serie.canceled === 0
   );
 
   // Status map color
@@ -340,6 +350,13 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
   const handleTabChange = useCallback((value: string) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', value);
+    router.push(`/dashboard?${params.toString()}`);
+  }, [searchParams, router]);
+
+  const handlePeoplePeriodChange = useCallback((value: '7d' | '30d' | 'all') => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', 'people');
+    params.set('peoplePeriod', value);
     router.push(`/dashboard?${params.toString()}`);
   }, [searchParams, router]);
 
@@ -376,6 +393,33 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
             }
           </p>
         </div>
+        {activeTab === 'people' && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              Período
+            </span>
+            <div className="inline-flex rounded-md border border-border/70 bg-muted/20 p-1">
+              <button
+                className={`px-3 py-1 text-sm ${peoplePeriod === '7d' ? 'bg-muted/80 rounded' : ''}`}
+                onClick={() => handlePeoplePeriodChange('7d')}
+              >
+                7 dias
+              </button>
+              <button
+                className={`px-3 py-1 text-sm ${peoplePeriod === '30d' ? 'bg-muted/80 rounded' : ''}`}
+                onClick={() => handlePeoplePeriodChange('30d')}
+              >
+                30 dias
+              </button>
+              <button
+                className={`px-3 py-1 text-sm ${peoplePeriod === 'all' ? 'bg-muted/80 rounded' : ''}`}
+                onClick={() => handlePeoplePeriodChange('all')}
+              >
+                Tudo
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
@@ -431,7 +475,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
                   <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <CardTitle>Volume de pedidos</CardTitle>
-                      <CardDescription>Comparativo: Criados / Em separação / Finalizados</CardDescription>
+                      <CardDescription>Comparativo: Criados / Em separação / Finalizados / Cancelados</CardDescription>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="inline-flex rounded-md border border-border/70 bg-muted/20 p-1">
@@ -473,6 +517,7 @@ function DashboardClientContent({ data, peopleData }: DashboardClientProps) {
                         <Line type="monotone" dataKey="created" name="Criados" stroke="#6366f1" strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0, fill: '#6366f1' }} />
                         <Line type="monotone" dataKey="inSeparation" name="Em separação" stroke="#f59e0b" strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0, fill: '#f59e0b' }} />
                         <Line type="monotone" dataKey="finalized" name="Finalizados" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0, fill: '#10b981' }} />
+                        <Line type="monotone" dataKey="canceled" name="Cancelados" stroke="#ef4444" strokeWidth={3} dot={false} activeDot={{ r: 6, strokeWidth: 0, fill: '#ef4444' }} />
                       </LineChart>
                     </ResponsiveContainer>
                   )}
