@@ -220,10 +220,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         )
         const materialDescription = descRes.rows[0]?.description ?? null
         const materialUnit = descRes.rows[0]?.unit ?? 'EA'
+        const bodyUom = typeof body.uom === 'string' ? body.uom.trim().toUpperCase() : ''
+        let requestedUom = materialUnit
+        if (bodyUom) {
+          const uomRes = await client.query('SELECT 1 FROM uoms WHERE tenant_id = $1 AND code = $2', [auth.tenantId, bodyUom])
+          if (uomRes.rowCount > 0) {
+            requestedUom = bodyUom
+          }
+        }
         await client.query(
           `INSERT INTO order_items (order_id, material_id, quantity, unit_price, requested_uom, color, shortage_action, item_description, tenant_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [orderId, materialId, 0, 0, materialUnit, '', 'PRODUCE', materialDescription, auth.tenantId]
+          [orderId, materialId, 0, 0, requestedUom, '', 'PRODUCE', materialDescription, auth.tenantId]
         )
       } else if (action === 'remove_item') {
         const itemId = parseItemId(body.itemId ?? '')

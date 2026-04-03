@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from 'react';
 import { Database } from 'lucide-react';
+import { usePingStatus } from './health/ping-store';
 
 type Status = 'loading' | 'connected' | 'disconnected';
 
@@ -20,63 +20,8 @@ const statusConfig: Record<Status, { label: string; iconColor: string }> = {
   },
 };
 
-let globalDbStatus: Status = 'loading';
-let globalDbLatency: number | null = null;
-let lastDbCheck = 0;
-
 export default function DbHealth() {
-  const [status, setStatus] = React.useState<Status>(globalDbStatus);
-  const [latency, setLatency] = React.useState<number | null>(globalDbLatency);
-  const statusRef = React.useRef(status);
-  const latencyRef = React.useRef(latency);
-
-  React.useEffect(() => {
-    statusRef.current = status;
-    latencyRef.current = latency;
-  }, [status, latency]);
-
-  React.useEffect(() => {
-    let mounted = true;
-
-    const check = async (force = false) => {
-      const start = Date.now();
-      if (!force && lastDbCheck > 0 && start - lastDbCheck < 120000) {
-        if (mounted) {
-          if (statusRef.current !== globalDbStatus) setStatus(globalDbStatus);
-          if (latencyRef.current !== globalDbLatency) setLatency(globalDbLatency);
-        }
-        return;
-      }
-      try {
-        const res = await fetch('/api/ping', { cache: 'no-store' });
-        const end = Date.now();
-        const measure = Math.max(1, Math.round(end - start));
-        const newStatus = res.ok ? 'connected' : 'disconnected';
-        globalDbStatus = newStatus;
-        globalDbLatency = res.ok ? measure : null;
-        lastDbCheck = Date.now();
-        if (mounted) {
-          setStatus(newStatus);
-          setLatency(res.ok ? measure : null);
-        }
-      } catch {
-        globalDbStatus = 'disconnected';
-        globalDbLatency = null;
-        lastDbCheck = Date.now();
-        if (mounted) {
-          setStatus('disconnected');
-          setLatency(null);
-        }
-      }
-    };
-
-    check();
-    const id = window.setInterval(() => check(true), 120000);
-    return () => {
-      mounted = false;
-      window.clearInterval(id);
-    };
-  }, []);
+  const { status, latency } = usePingStatus();
 
   const cfg = statusConfig[status];
 

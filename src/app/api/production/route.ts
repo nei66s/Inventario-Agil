@@ -132,12 +132,14 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAuth(request)
     const payload = await request.json()
-    const orderId = Number(String(payload.orderId ?? '').replace(/\D+/g, ''))
+    const orderIdRaw = String(payload.orderId ?? '').replace(/\D+/g, '')
+    let orderId = orderIdRaw ? Number(orderIdRaw) : 0
     const materialId = Number(String(payload.materialId ?? '').replace(/\D+/g, ''))
     const qtyToProduce = Number(payload.qtyToProduce ?? 0)
+    const requestedUomRaw = String(payload.requestedUom ?? '').trim().toUpperCase()
+    const requestedUom = requestedUomRaw && /^[A-Z]+$/.test(requestedUomRaw) ? requestedUomRaw : null
 
     const errors: Record<string, string> = {}
-    if (!orderId) errors.orderId = 'orderId é obrigatório'
     if (!materialId) errors.materialId = 'materialId é obrigatório'
     if (Number.isNaN(qtyToProduce) || qtyToProduce <= 0) errors.qtyToProduce = 'qtyToProduce deve ser maior que zero'
     if (Object.keys(errors).length > 0) return NextResponse.json({ errors }, { status: 400 })
@@ -146,7 +148,26 @@ export async function POST(request: NextRequest) {
     let createdRow: DbRow
     try {
       await client.query(`SET app.current_tenant_id = ${client.escapeLiteral(auth.tenantId)}`)
+      if (requestedUom) {
+        const uomRes = await client.query('SELECT 1 FROM uoms WHERE tenant_id = $1 AND code = $2', [
+          auth.tenantId,
+          requestedUom,
+        ])
+        if (uomRes.rowCount === 0) {
+          return NextResponse.json({ error: 'Unidade de medida invalida' }, { status: 400 })
+        }
+      }
       await client.query('BEGIN')
+      if (!orderId) {
+        const orderRes = await client.query(
+          `INSERT INTO orders (status, total, created_by, client_name, due_date, source, operation_mode, tenant_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+           RETURNING id`,
+          ['aberto', 0, auth.userId, null, null, 'mrp', 'BOTH', auth.tenantId]
+        )
+        orderId = Number(orderRes.rows[0].id)
+        await client.query('UPDATE orders SET order_number = $1 WHERE id = $2', [`MRP-${orderId}`, orderId])
+      }
       await lockOrderMutation(client, auth.tenantId, orderId)
       await lockMaterialMutations(client, auth.tenantId, [materialId])
 
@@ -185,14 +206,14 @@ export async function POST(request: NextRequest) {
         )
         if (existing.rowCount > 0) {
           await client.query(
-            'UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description) WHERE order_id = $1 AND material_id = $2',
-            [createdRow.order_id, createdRow.material_id, resultingQty, createdRow.description ?? null]
+            'UPDATE order_items SET quantity = $3, item_description = COALESCE($4, item_description), requested_uom = COALESCE($5, requested_uom) WHERE order_id = $1 AND material_id = $2',
+            [createdRow.order_id, createdRow.material_id, resultingQty, createdRow.description ?? null, requestedUom]
           )
         } else {
           await client.query(
-            `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description, tenant_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-            [createdRow.order_id, createdRow.material_id, resultingQty, 0, '', 'PRODUCE', createdRow.description ?? null, auth.tenantId]
+            `INSERT INTO order_items (order_id, material_id, quantity, unit_price, color, shortage_action, item_description, requested_uom, tenant_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [createdRow.order_id, createdRow.material_id, resultingQty, 0, '', 'PRODUCE', createdRow.description ?? null, requestedUom, auth.tenantId]
           )
         }
       }

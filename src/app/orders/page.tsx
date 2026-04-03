@@ -113,10 +113,29 @@ export default function OrdersPage() {
     stockReservations: StockReservation[];
     users: User[];
   }>({ orders: [], materials: [], stockBalances: [], stockReservations: [], users: [] });
+  const [uoms, setUoms] = React.useState<Array<{ code: string; description?: string }>>([]);
 
   const { user: authUser } = useAuthUser();
   const currentUserId = authUser?.id ?? '';
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/uoms', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setUoms(Array.isArray(data) ? data : []);
+      } catch {
+        setUoms([]);
+      }
+    })();
+  }, []);
+
+  const requestUomOptions = React.useMemo(() => {
+    if (uoms.length > 0) return uoms.map((uom) => uom.code.toUpperCase());
+    return REQUEST_UOM_OPTIONS;
+  }, [uoms]);
 
   const updateOrderDraft = React.useCallback((orderId: string, updater: (draft: OrderDraft) => OrderDraft | null) => {
     const current = pendingOrderDraftsRef.current[orderId] ?? {};
@@ -152,6 +171,7 @@ export default function OrdersPage() {
       return applyOrderDraft(order, pendingOrderDraftsRef.current[order.id]);
     });
     setDb((prev) => ({ ...prev, orders: mergedOrders }));
+    return mergedOrders;
   }, [pruneOrderDraft]);
 
   const refreshInventory = React.useCallback(async () => {
@@ -198,13 +218,15 @@ export default function OrdersPage() {
   }, [refreshOrders]);
 
   const addItem = React.useCallback(async (orderId: string, materialId: string) => {
+    const material = db.materials.find((m) => m.id === materialId);
+    const preferredUom = String(material?.standardUom ?? '').trim().toUpperCase();
     await fetch(`/api/orders/${orderId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add_item', materialId }),
+      body: JSON.stringify({ action: 'add_item', materialId, uom: preferredUom || undefined }),
     });
     await refreshOrders();
-  }, [refreshOrders]);
+  }, [db.materials, refreshOrders]);
 
   const removeOrderItem = React.useCallback(async (orderId: string, itemId: string) => {
     await fetch(`/api/orders/${orderId}`, {
@@ -996,9 +1018,12 @@ export default function OrdersPage() {
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {Array.from(new Set([...REQUEST_UOM_OPTIONS, normalizeRequestedUom(item.uom)])).map((uomOption) => (
+                                      {Array.from(new Set([...requestUomOptions, normalizeRequestedUom(item.uom)])).map((uomOption) => (
                                         <SelectItem key={uomOption} value={uomOption}>
                                           {uomOption}
+                                          {uoms.find((entry) => entry.code.toUpperCase() === uomOption)?.description
+                                            ? ` - ${uoms.find((entry) => entry.code.toUpperCase() === uomOption)?.description}`
+                                            : ''}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>

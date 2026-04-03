@@ -3,52 +3,17 @@
 import * as React from 'react';
 import { Zap, ZapOff, Loader2 } from 'lucide-react';
 import { useRealtimeStore } from '@/store/use-realtime-store';
+import { usePingStatus } from './health/ping-store';
 
 export default function WsHealth() {
   const { isConnected, isConnecting } = useRealtimeStore();
   const [mounted, setMounted] = React.useState(false);
 
-  const [latency, setLatency] = React.useState<number | null>(null);
+  const { latency } = usePingStatus({ enabled: isConnected });
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
-
-  React.useEffect(() => {
-    let interval: number;
-    let mountedLocal = true;
-
-    const measurePing = async () => {
-      // Only measure if connected, otherwise we might just be showing disconnected
-      if (!isConnected) {
-        if (mountedLocal) setLatency(null);
-        return;
-      }
-      
-      const start = Date.now();
-      try {
-        const res = await fetch('/api/ping', { cache: 'no-store' });
-        const end = Date.now();
-        if (res.ok && mountedLocal) {
-          setLatency(Math.max(1, Math.round(end - start)));
-        }
-      } catch {
-        if (mountedLocal) setLatency(null);
-      }
-    };
-
-    if (isConnected) {
-      measurePing();
-      interval = window.setInterval(measurePing, 120000);
-    } else {
-      setLatency(null);
-    }
-
-    return () => {
-      mountedLocal = false;
-      if (interval) window.clearInterval(interval);
-    };
-  }, [isConnected]);
 
   if (!mounted) {
     return (

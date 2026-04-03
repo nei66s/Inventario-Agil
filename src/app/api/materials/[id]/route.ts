@@ -15,7 +15,7 @@ export async function PUT(request: NextRequest, { params }: any) {
     const name = String(payload.name ?? '').trim()
     if (!name) errors.name = 'Nome é obrigatório'
 
-    const standardUom = String(payload.standardUom ?? 'EA').trim() || 'EA'
+    const standardUom = String(payload.standardUom ?? 'EA').trim().toUpperCase() || 'EA'
 
     const minStock = Number(payload.minStock ?? 0)
     const reorderPoint = Number(payload.reorderPoint ?? 0)
@@ -26,6 +26,8 @@ export async function PUT(request: NextRequest, { params }: any) {
     if (Number.isNaN(reorderPoint) || reorderPoint < 0) errors.reorderPoint = 'Ponto de pedido inválido'
     if (Number.isNaN(setupTimeMinutes) || setupTimeMinutes < 0) errors.setupTimeMinutes = 'Tempo de preparação inválido'
     if (Number.isNaN(productionTimePerUnitMinutes) || productionTimePerUnitMinutes < 0) errors.productionTimePerUnitMinutes = 'Tempo de produção inválido'
+    const uomCheck = await query('SELECT 1 FROM uoms WHERE tenant_id = $1 AND code = $2', [auth.tenantId, standardUom])
+    if (!uomCheck.rowCount) errors.standardUom = 'Unidade inválida'
 
     let colorOptions: string[] = []
     if (Array.isArray(payload.colorOptions)) colorOptions = payload.colorOptions.map(String)

@@ -53,6 +53,12 @@ type PreconditionCategory = {
   name: string;
   values: PreconditionValue[];
 };
+type UomOption = {
+  code: string;
+  description?: string;
+  usageCount?: number;
+  materialsCount?: number;
+};
 
 const defaultConditionCategories = ['Fibra', 'FibraCor', 'Corda', 'CordaCor', 'Trico', 'TricoCor', 'Fio', 'Fiocor'];
 
@@ -69,6 +75,17 @@ export default function MaterialsPage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState('');
   const [isUsingFallbackData, setIsUsingFallbackData] = useState(false);
+  const [uoms, setUoms] = useState<UomOption[]>([]);
+  const [uomsLoading, setUomsLoading] = useState(false);
+  const [newUomCode, setNewUomCode] = useState('');
+  const [newUomDescription, setNewUomDescription] = useState('');
+  const [uomError, setUomError] = useState('');
+  const [uomEditCode, setUomEditCode] = useState<string | null>(null);
+  const [uomEditDescription, setUomEditDescription] = useState('');
+  const [uomUsageDialogOpen, setUomUsageDialogOpen] = useState(false);
+  const [uomUsageList, setUomUsageList] = useState<{ name: string; sku?: string }[]>([]);
+  const [uomUsageCode, setUomUsageCode] = useState('');
+  const [uomUsageSearch, setUomUsageSearch] = useState('');
 
   const { toast } = useToast();
   const form = useForm<MaterialFormValues>({ defaultValues });
@@ -98,6 +115,24 @@ export default function MaterialsPage() {
   useEffect(() => {
     fetchMaterials();
   }, [fetchMaterials]);
+
+  const fetchUoms = useCallback(async () => {
+    setUomsLoading(true);
+    try {
+      const res = await fetch('/api/uoms', { cache: 'no-store' });
+      const data = await res.json();
+      if (!mountedRef.current) return;
+      setUoms(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load uoms', err);
+    } finally {
+      if (mountedRef.current) setUomsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUoms();
+  }, [fetchUoms]);
 
   const fallbackCategoriesFromMetadata = useMemo(() => {
     const aggregated: Record<string, Set<string>> = {};
@@ -178,6 +213,8 @@ export default function MaterialsPage() {
 
   const openNew = () => {
     form.reset(defaultValues);
+    const fallbackUom = (uoms[0]?.code ?? defaultValues.standardUom).toUpperCase();
+    form.setValue('standardUom', fallbackUom);
     setEditing(null);
     setOpen(true);
   };
@@ -185,10 +222,11 @@ export default function MaterialsPage() {
   const openEdit = (id: string) => {
     const material = db.materials.find((x: any) => x.id === id);
     if (!material) return;
+    const currentUom = String(material.standardUom ?? '').toUpperCase();
     form.reset({
       sku: material.sku || '',
       name: material.name,
-      standardUom: material.standardUom,
+      standardUom: currentUom || (uoms[0]?.code ?? defaultValues.standardUom),
       minStock: material.minStock,
       reorderPoint: material.reorderPoint,
       setupTimeMinutes: material.setupTimeMinutes,
@@ -265,6 +303,104 @@ export default function MaterialsPage() {
       await fetchMaterials();
     } catch {
       toast({ title: 'Erro', description: 'Erro ao remover material', variant: 'destructive' });
+    }
+  };
+
+  const handleCreateUom = async () => {
+    const code = newUomCode.trim().toUpperCase();
+    if (!code) {
+      setUomError('Codigo obrigatorio');
+      return;
+    }
+    setUomError('');
+    try {
+      const res = await fetch('/api/uoms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, description: newUomDescription.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setUomError(err?.error || 'Falha ao adicionar unidade');
+        return;
+      }
+      setNewUomCode('');
+      setNewUomDescription('');
+      await fetchUoms();
+      toast({ title: 'Unidade criada', description: 'Unidade adicionada com sucesso', variant: 'success' });
+    } catch {
+      setUomError('Erro ao adicionar unidade');
+    }
+  };
+
+  const handleRemoveUom = async (code: string) => {
+    if (!confirm(`Remover unidade ${code}?`)) return;
+    try {
+      const res = await fetch(`/api/uoms?code=${encodeURIComponent(code)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (Array.isArray(err?.materials) && err.materials.length > 0) {
+          const names = err.materials
+            .slice(0, 5)
+            .map((m: any) => (m.sku ? `${m.sku} - ${m.name}` : m.name))
+            .join(', ');
+          const more = err.materials.length > 5 ? `... +${err.materials.length - 5}` : '';
+          toast({
+            title: 'Unidade em uso',
+            description: `${names}${more}`,
+            variant: 'destructive',
+          });
+          setUomUsageCode(code);
+          setUomUsageList(err.materials);
+          setUomUsageDialogOpen(true);
+          return;
+        }
+        toast({ title: 'Erro', description: err?.error || 'Falha ao remover unidade', variant: 'destructive' });
+        return;
+      }
+      await fetchUoms();
+      toast({ title: 'Unidade removida', description: 'Unidade removida com sucesso', variant: 'success' });
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao remover unidade', variant: 'destructive' });
+    }
+  };
+
+  const handleStartEditUom = (uom: UomOption) => {
+    if (Number(uom.usageCount ?? 0) > 0) {
+      toast({
+        title: 'Unidade em uso',
+        description: 'Nao e possivel editar a descricao enquanto estiver em uso.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setUomEditCode(uom.code);
+    setUomEditDescription(uom.description ?? '');
+  };
+
+  const handleCancelEditUom = () => {
+    setUomEditCode(null);
+    setUomEditDescription('');
+  };
+
+  const handleSaveUomDescription = async () => {
+    if (!uomEditCode) return;
+    try {
+      const res = await fetch('/api/uoms', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: uomEditCode, description: uomEditDescription.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: 'Erro', description: err?.error || 'Falha ao atualizar unidade', variant: 'destructive' });
+        return;
+      }
+      await fetchUoms();
+      toast({ title: 'Unidade atualizada', description: 'Descricao atualizada', variant: 'success' });
+      handleCancelEditUom();
+    } catch {
+      toast({ title: 'Erro', description: 'Falha ao atualizar unidade', variant: 'destructive' });
     }
   };
   const handleRemoveCondition = useCallback(
@@ -501,6 +637,115 @@ export default function MaterialsPage() {
           <Card>
             <CardHeader className="flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:items-center">
               <div>
+                <CardTitle className="font-headline">Unidades de Medida</CardTitle>
+                <CardDescription>Cadastre as unidades globais usadas em materiais e producao.</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {uomsLoading ? (
+                <EmptyState title="Carregando unidades..." description="Aguarde enquanto os dados sao carregados." className="min-h-[120px]" />
+              ) : (
+                <>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                      <Input
+                        placeholder="Codigo (ex: KG)"
+                        value={newUomCode}
+                        onChange={(event) => setNewUomCode(event.target.value)}
+                      />
+                    <Input
+                      placeholder="Descricao (opcional)"
+                      value={newUomDescription}
+                      onChange={(event) => setNewUomDescription(event.target.value)}
+                    />
+                      <Button onClick={handleCreateUom}>Adicionar unidade</Button>
+                    </div>
+                    {uomError ? (
+                      <p className="text-xs text-destructive">{uomError}</p>
+                    ) : null}
+                  {uoms.length === 0 ? (
+                    <EmptyState
+                      icon={Boxes}
+                      title="Nenhuma unidade"
+                      description="Cadastre ao menos uma unidade para continuar."
+                      className="min-h-[140px]"
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                      {uoms.map((uom) => {
+                        const inUse = Number(uom.usageCount ?? 0) > 0;
+                        return (
+                        <div key={uom.code} className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold">{uom.code}</p>
+                              {uomEditCode === uom.code ? (
+                                <Input
+                                  className="mt-1 h-8 text-xs"
+                                  value={uomEditDescription}
+                                  onChange={(event) => setUomEditDescription(event.target.value)}
+                                  placeholder="Descricao"
+                                />
+                              ) : uom.description ? (
+                                <p className="text-xs text-muted-foreground">{uom.description}</p>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">Sem descricao</p>
+                              )}
+                              {inUse ? (
+                                <button
+                                  type="button"
+                                  className="text-[10px] uppercase tracking-widest text-amber-600 mt-1 hover:underline"
+                                  onClick={async () => {
+                                    setUomUsageCode(uom.code);
+                                    setUomUsageSearch('');
+                                    setUomUsageList([]);
+                                    setUomUsageDialogOpen(true);
+                                    try {
+                                      const res = await fetch(`/api/uoms?code=${encodeURIComponent(uom.code)}`);
+                                      if (!res.ok) return;
+                                      const data = await res.json();
+                                      if (Array.isArray(data?.materials)) {
+                                        setUomUsageList(data.materials);
+                                      }
+                                    } catch {}
+                                  }}
+                                >
+                                  Em uso ({uom.materialsCount ?? 0})
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {uomEditCode === uom.code ? (
+                                <>
+                                  <Button variant="outline" size="icon" onClick={handleSaveUomDescription}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={handleCancelEditUom}>
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => handleStartEditUom(uom)} disabled={inUse}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleRemoveUom(uom.code)} disabled={inUse}>
+                                    <Trash className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )})}
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:items-center">
+              <div>
                 <CardTitle className="font-headline">Pré-condições</CardTitle>
                 <CardDescription>Categorias globais com os valores possíveis.</CardDescription>
               </div>
@@ -694,7 +939,29 @@ export default function MaterialsPage() {
               <FormItem>
                 <FormLabel>Unidade</FormLabel>
                 <FormControl>
-                  <Input {...form.register('standardUom', { required: true })} />
+                  <select
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={form.watch('standardUom')}
+                    onChange={(event) => form.setValue('standardUom', event.target.value)}
+                  >
+                    {uoms.length === 0 ? (
+                      <option value={form.watch('standardUom')}>{form.watch('standardUom')}</option>
+                    ) : (
+                      Array.from(new Set([
+                        ...uoms.map((uom) => uom.code.toUpperCase()),
+                        String(form.watch('standardUom') ?? '').toUpperCase(),
+                      ]))
+                        .filter(Boolean)
+                        .map((uom) => (
+                          <option key={uom} value={uom}>
+                            {uom}
+                            {uoms.find((entry) => entry.code.toUpperCase() === uom)?.description
+                              ? ` - ${uoms.find((entry) => entry.code.toUpperCase() === uom)?.description}`
+                              : ''}
+                          </option>
+                        ))
+                    )}
+                  </select>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -771,6 +1038,56 @@ export default function MaterialsPage() {
                 <Button type="submit">Criar</Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={uomUsageDialogOpen} onOpenChange={setUomUsageDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unidade em uso: {uomUsageCode}</DialogTitle>
+              <DialogDescription>Materiais que utilizam esta unidade.</DialogDescription>
+            </DialogHeader>
+            <Input
+              placeholder="Buscar material..."
+              value={uomUsageSearch}
+              onChange={(event) => setUomUsageSearch(event.target.value)}
+            />
+            <div className="space-y-2 max-h-[50vh] overflow-auto">
+              {uomUsageList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum material encontrado.</p>
+              ) : (
+                <>
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Mostrando {uomUsageList.filter((item) => {
+                      if (!uomUsageSearch) return true;
+                      const q = uomUsageSearch.toLowerCase();
+                      return (
+                        String(item.name ?? '').toLowerCase().includes(q) ||
+                        String(item.sku ?? '').toLowerCase().includes(q)
+                      );
+                    }).length} de {uomUsageList.length}
+                  </p>
+                  {uomUsageList
+                    .filter((item) => {
+                      if (!uomUsageSearch) return true;
+                      const q = uomUsageSearch.toLowerCase();
+                      return (
+                        String(item.name ?? '').toLowerCase().includes(q) ||
+                        String(item.sku ?? '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map((item, idx) => (
+                      <div key={`${item.name}-${idx}`} className="flex items-center justify-between rounded-md border border-border/70 bg-muted/30 px-2 py-1 text-[12px] text-muted-foreground">
+                        <span>{item.sku ? `${item.sku} - ${item.name}` : item.name}</span>
+                      </div>
+                    ))}
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="ghost">Fechar</Button>
+              </DialogClose>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </>

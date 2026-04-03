@@ -23,6 +23,7 @@ function toPositiveInt(rawValue: string | undefined, fallback: number): number {
 }
 
 export function getPoolConfig(): PoolConfig {
+  const isDev = process.env.NODE_ENV !== 'production'
   const baseConfig: PoolConfig = {
     // VERCEL SERVERLESS + PGBOUNCER CONFIGURATION
 
@@ -34,12 +35,12 @@ export function getPoolConfig(): PoolConfig {
     // Contenção agressiva de concorrência por Lambda.
     // O Next.js (Serverless) deve abrir no máximo 2 portas pro banco na mesma requisição simultânea.
     // O afunilamento real de requisições globais ocorre no PgBouncer na VPS, e não no backend Vercel.
-    max: toPositiveInt(process.env.PG_POOL_MAX, 2),
+    max: toPositiveInt(process.env.PG_POOL_MAX, isDev ? 10 : 2),
 
     // Timeouts muito agressivos. 
     // Em Serverless, as conexões devem ser mortas (release in pool) rapidamente quando ociosas
     // para limpar a esteira do PgBouncer. E timeouts de conexão curtos evitam hang da API.
-    idleTimeoutMillis: toPositiveInt(process.env.PG_IDLE_TIMEOUT_MS, 10_000), // 10s
+    idleTimeoutMillis: toPositiveInt(process.env.PG_IDLE_TIMEOUT_MS, isDev ? 60_000 : 10_000), // 10s (prod) / 60s (dev)
     connectionTimeoutMillis: toPositiveInt(process.env.PG_CONNECTION_TIMEOUT_MS, 5_000), // 5s
   }
 

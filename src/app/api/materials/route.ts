@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const name = String(payload.name ?? '').trim()
     if (!name) errors.name = 'Nome é obrigatório'
 
-    const standardUom = String(payload.standardUom ?? 'EA').trim() || 'EA'
+    const standardUom = String(payload.standardUom ?? 'EA').trim().toUpperCase() || 'EA'
 
     const minStock = Number(payload.minStock ?? 0)
     const reorderPoint = Number(payload.reorderPoint ?? 0)
@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
     const sku = payload.sku ? String(payload.sku).trim() : null
     if (sku && !/^[A-Z0-9\-]+$/i.test(sku)) errors.sku = 'SKU inválido (apenas letras, números e traços)'
 
+    const uomCheck = await query('SELECT 1 FROM uoms WHERE tenant_id = $1 AND code = $2', [auth.tenantId, standardUom])
+    if (!uomCheck.rowCount) errors.standardUom = 'Unidade inválida'
     if (Object.keys(errors).length > 0) return NextResponse.json({ errors }, { status: 400 })
 
     // If sku provided, ensure uniqueness

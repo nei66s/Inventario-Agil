@@ -525,7 +525,7 @@ function AppShellContent({ children, initialUser }: { children: React.ReactNode,
     };
 
     fetchBadges();
-    const interval = setInterval(() => fetchBadges(true), 30000); // refresh every 30s
+    const interval = setInterval(() => fetchBadges(true), 60000); // refresh every 60s
     window.addEventListener('app:data-refreshed', handleDataRefresh);
     return () => {
       clearInterval(interval);

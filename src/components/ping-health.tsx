@@ -1,7 +1,7 @@
 "use client";
 
-import * as React from 'react';
 import { Loader2, Wifi, WifiOff } from 'lucide-react';
+import { usePingStatus } from './health/ping-store';
 
 type Status = 'loading' | 'connected' | 'disconnected';
 
@@ -20,63 +20,8 @@ const statusConfig: Record<Status, { label: string; iconColor: string }> = {
   },
 };
 
-let globalPingStatus: Status = 'loading';
-let globalLatency: number | null = null;
-let lastPingCheck = 0;
-
 export default function PingHealth() {
-  const [status, setStatus] = React.useState<Status>(globalPingStatus);
-  const [latency, setLatency] = React.useState<number | null>(globalLatency);
-  const statusRef = React.useRef(status);
-  const latencyRef = React.useRef(latency);
-
-  React.useEffect(() => {
-    statusRef.current = status;
-    latencyRef.current = latency;
-  }, [status, latency]);
-
-  React.useEffect(() => {
-    let mounted = true;
-
-    const measurePing = async (force = false) => {
-      const start = Date.now();
-      if (!force && lastPingCheck > 0 && start - lastPingCheck < 120000) {
-        if (mounted) {
-          if (statusRef.current !== globalPingStatus) setStatus(globalPingStatus);
-          if (latencyRef.current !== globalLatency) setLatency(globalLatency);
-        }
-        return;
-      }
-      try {
-        const res = await fetch('/api/ping', { cache: 'no-store' });
-        const end = Date.now();
-        const measure = Math.max(1, Math.round(end - start));
-        const newStatus = res.ok ? 'connected' : 'disconnected';
-        globalPingStatus = newStatus;
-        globalLatency = res.ok ? measure : null;
-        lastPingCheck = Date.now();
-        if (mounted) {
-          setStatus(newStatus);
-          setLatency(res.ok ? measure : null);
-        }
-      } catch {
-        globalPingStatus = 'disconnected';
-        globalLatency = null;
-        lastPingCheck = Date.now();
-        if (mounted) {
-          setStatus('disconnected');
-          setLatency(null);
-        }
-      }
-    };
-
-    measurePing();
-    const id = window.setInterval(() => measurePing(true), 120000);
-    return () => {
-      mounted = false;
-      window.clearInterval(id);
-    };
-  }, []);
+  const { status, latency } = usePingStatus();
 
   const cfg = statusConfig[status];
   const Icon = status === 'disconnected' ? WifiOff : status === 'loading' ? Loader2 : Wifi;

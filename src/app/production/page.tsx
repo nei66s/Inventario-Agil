@@ -6,6 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
   Table,
   TableBody,
   TableCell,
@@ -41,6 +50,17 @@ type ProductionTask = {
   producedQty?: number;
   producedWeight?: number;
   labelPrinted?: boolean;
+};
+
+type MaterialOption = {
+  id: string;
+  name: string;
+  sku?: string | null;
+  standardUom?: string;
+};
+type UomOption = {
+  code: string;
+  description?: string;
 };
 
 function errorMessage(err: unknown): string {
@@ -108,6 +128,15 @@ export default function ProductionPage() {
   const [busyLabelTaskId, setBusyLabelTaskId] = React.useState<string | null>(null);
   const [showHistory, setShowHistory] = React.useState(false);
   const tasksFingerprintRef = React.useRef('');
+  const [materials, setMaterials] = React.useState<MaterialOption[]>([]);
+  const [uoms, setUoms] = React.useState<UomOption[]>([]);
+  const [adHocOpen, setAdHocOpen] = React.useState(false);
+  const [adHocMaterialId, setAdHocMaterialId] = React.useState('');
+  const [adHocQty, setAdHocQty] = React.useState('');
+  const [adHocQuery, setAdHocQuery] = React.useState('');
+  const [adHocUom, setAdHocUom] = React.useState('EA');
+  const [adHocBusy, setAdHocBusy] = React.useState(false);
+  const [adHocError, setAdHocError] = React.useState<string | null>(null);
 
   const pruneTaskDraft = React.useCallback((task: ProductionTask) => {
     const draft = pendingTaskDraftsRef.current[task.id];
@@ -178,6 +207,32 @@ export default function ProductionPage() {
     const interval = setInterval(() => loadTasks({ skipLoading: true }), 30000);
     return () => clearInterval(interval);
   }, [loadTasks]);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/materials', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setMaterials(Array.isArray(data) ? data : []);
+      } catch {
+        setMaterials([]);
+      }
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/uoms', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setUoms(Array.isArray(data) ? data : []);
+      } catch {
+        setUoms([]);
+      }
+    })();
+  }, []);
 
   const updateTaskLocal = (taskId: string, field: 'producedQty' | 'producedWeight', value: number | undefined) => {
     pendingTaskDraftsRef.current[taskId] = {
@@ -354,6 +409,73 @@ export default function ProductionPage() {
     }
   };
 
+  const selectedAdHocMaterial = React.useMemo(
+    () => materials.find((item) => item.id === adHocMaterialId) ?? null,
+    [materials, adHocMaterialId]
+  );
+
+  React.useEffect(() => {
+    if (!selectedAdHocMaterial) {
+      const fallback = uoms[0]?.code ?? 'EA';
+      setAdHocUom(fallback.toUpperCase());
+      return;
+    }
+    const materialUom = (selectedAdHocMaterial.standardUom ?? '').toUpperCase();
+    if (materialUom && uoms.some((u) => u.code.toUpperCase() === materialUom)) {
+      setAdHocUom(materialUom);
+      return;
+    }
+    const fallback = uoms[0]?.code ?? materialUom ?? 'EA';
+    setAdHocUom(String(fallback).toUpperCase());
+  }, [selectedAdHocMaterial, uoms]);
+
+  const adHocUomNormalized = adHocUom.toUpperCase();
+
+  const resetAdHocDialog = () => {
+    setAdHocMaterialId('');
+    setAdHocQty('');
+    setAdHocQuery('');
+    setAdHocUom('EA');
+    setAdHocError(null);
+    setAdHocBusy(false);
+  };
+
+  const handleCreateAdHoc = async () => {
+    if (!selectedAdHocMaterial) {
+      setAdHocError('Selecione um material valido.');
+      return;
+    }
+    const qty = Number(adHocQty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      setAdHocError('Informe uma quantidade maior que zero.');
+      return;
+    }
+    setAdHocBusy(true);
+    setAdHocError(null);
+    try {
+      const res = await fetch('/api/production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          materialId: selectedAdHocMaterial.id,
+          qtyToProduce: qty,
+          requestedUom: adHocUomNormalized,
+        }),
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'Falha ao criar producao avulsa');
+      }
+      await loadTasks({ skipLoading: true });
+      setAdHocOpen(false);
+      resetAdHocDialog();
+    } catch (err: unknown) {
+      setAdHocError(errorMessage(err));
+    } finally {
+      setAdHocBusy(false);
+    }
+  };
+
   const renderTaskRow = (task: ProductionTask) => {
     return (
       <TableRow key={task.id}>
@@ -521,6 +643,99 @@ export default function ProductionPage() {
   };
 
   return (
+    <>
+    <Dialog open={adHocOpen} onOpenChange={(open) => {
+      setAdHocOpen(open);
+      if (!open) resetAdHocDialog();
+    }}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>Producao Avulsa</DialogTitle>
+          <DialogDescription>
+            Lance uma producao sem pedido. O sistema cria um pedido interno (MRP).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="ad-hoc-material">Material</Label>
+            <Input
+              id="ad-hoc-material"
+              placeholder="Buscar por nome ou SKU"
+              value={adHocQuery}
+              onChange={(e) => setAdHocQuery(e.target.value)}
+            />
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={adHocMaterialId}
+              onChange={(e) => setAdHocMaterialId(e.target.value)}
+            >
+              <option value="">Selecione o material</option>
+              {materials
+                .filter((material) => {
+                  if (!adHocQuery) return true;
+                  const q = adHocQuery.toLowerCase();
+                  const sku = String(material.sku ?? '').toLowerCase();
+                  const name = String(material.name ?? '').toLowerCase();
+                  return sku.includes(q) || name.includes(q) || material.id.toLowerCase().includes(q);
+                })
+                .map((material) => (
+                  <option key={material.id} value={material.id}>
+                    {material.sku ? `${material.sku} - ` : ''}{material.name} ({material.id})
+                  </option>
+                ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {selectedAdHocMaterial
+                ? `${selectedAdHocMaterial.name} (${selectedAdHocMaterial.standardUom ?? 'EA'})`
+                : 'Selecione um material valido na lista.'}
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="ad-hoc-uom">Unidade</Label>
+            <select
+              id="ad-hoc-uom"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={adHocUomNormalized}
+              onChange={(e) => setAdHocUom(e.target.value.toUpperCase())}
+            >
+              {uoms.length === 0 ? (
+                <option value={adHocUomNormalized}>{adHocUomNormalized}</option>
+              ) : (
+                uoms.map((uom) => (
+                  <option key={uom.code} value={uom.code}>
+                    {uom.code}{uom.description ? ` - ${uom.description}` : ''}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="ad-hoc-qty">Quantidade</Label>
+            <Input
+              id="ad-hoc-qty"
+              type="number"
+              step={adHocUomNormalized === 'KG' || adHocUomNormalized === 'M' ? '0.01' : undefined}
+              placeholder={adHocUomNormalized}
+              value={adHocQty}
+              onChange={(e) => setAdHocQty(e.target.value)}
+            />
+          </div>
+          {adHocError ? (
+            <p className="text-xs font-semibold text-destructive bg-destructive/10 border border-destructive/20 rounded-md px-2 py-1">
+              {adHocError}
+            </p>
+          ) : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setAdHocOpen(false)} disabled={adHocBusy}>
+            Cancelar
+          </Button>
+          <Button onClick={handleCreateAdHoc} disabled={adHocBusy}>
+            {adHocBusy ? 'Salvando...' : 'Criar producao'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Card>
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -530,6 +745,9 @@ export default function ProductionPage() {
               Tarefas de producao persistidas no banco. Concluir libera para o picking.
             </CardDescription>
           </div>
+          <Button className="w-full sm:w-auto" onClick={() => setAdHocOpen(true)}>
+            Producao avulsa
+          </Button>
         </div>
       </CardHeader>
       {error ? (
@@ -632,5 +850,6 @@ export default function ProductionPage() {
         </CardContent>
       ) : null}
     </Card>
+    </>
   );
 }
