@@ -1,51 +1,24 @@
-# Guia de Contribuicao
+﻿# Contribuindo
 
-Obrigado por contribuir com o Inventario Agil.
+Este projeto segue um fluxo simples de Git para manter o `main` sempre estável.
 
-## Como comecar
+## Regra geral
+- **Sempre crie uma branch nova** antes de iniciar mudanças.
+- **Nunca commite direto no `main`**.
 
-1. Faça um fork do repositorio.
-2. Clone o projeto localmente.
-3. Crie uma branch descritiva, como `feature/nova-tela` ou `fix/reserva-duplicada`.
-4. Instale as dependencias com `npm install`.
+## Fluxo recomendado
+1. Atualize o repositório:
+   - `git pull`
+2. Crie uma branch a partir do `main`:
+   - `git checkout -b feature/nome-curto`
+3. Faça as alterações e commits.
+4. Suba a branch:
+   - `git push -u origin feature/nome-curto`
+5. Abra um PR para revisão e merge.
 
-## Padroes de desenvolvimento
+## Convenção de nomes de branch
+- `feature/<descricao>` para novas funcionalidades
+- `fix/<descricao>` para correções
+- `chore/<descricao>` para manutenção interna
 
-- Escreva codigo em TypeScript e evite `any`.
-- Reaproveite os componentes de `src/components/ui` quando fizer sentido.
-- Mantenha o estilo alinhado ao Tailwind e aos componentes ja existentes.
-- Em alteracoes de banco, adicione migration e rode `npm run db:migrate`.
-
-## Commits
-
-Use Conventional Commits sempre que possivel:
-
-- `feat:` para nova funcionalidade
-- `fix:` para correcao de bug
-- `docs:` para documentacao
-- `refactor:` para refatoracao sem mudanca funcional
-- `test:` para testes
-- `chore:` para manutencao
-
-## Checklist antes do PR
-
-Rode estes comandos antes de abrir um pull request:
-
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
-
-Se voce alterou fluxo de interface ou operacao critica, rode tambem:
-
-```bash
-npm run test:e2e
-```
-
-## Enviando mudancas
-
-1. Faça push da sua branch.
-2. Abra o pull request para `main`.
-3. Explique o contexto, o risco e como validar.
-4. Inclua screenshots quando houver mudanca visual relevante.
+Se precisar de exceção (hotfix urgente em produção), documente no PR e mantenha o menor escopo possível.

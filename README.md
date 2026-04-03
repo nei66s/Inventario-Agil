@@ -99,3 +99,6 @@ npm run ci
 ## Licenca
 
 MIT. Veja [docs/LICENSE](./docs/LICENSE).
+
+## Contribuindo
+Antes de começar, crie uma branch nova e faça PR. Veja `docs/CONTRIBUTING.md`.
