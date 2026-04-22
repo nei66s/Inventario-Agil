@@ -17,7 +17,7 @@ const DEFAULT_STATE: PingState = {
 };
 
 let state: PingState = DEFAULT_STATE;
-let listeners = new Set<(next: PingState) => void>();
+const listeners = new Set<(next: PingState) => void>();
 let intervalId: number | null = null;
 let inFlight: Promise<void> | null = null;
 
